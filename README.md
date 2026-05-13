@@ -208,18 +208,6 @@ AI 驱动的攻击性文本生成器，内置 369 条精标语录库，支持 7 
 
 ---
 
-## 项目结构
-
-
-ai-html-workshop/
-├── 群策.html      # 多 Agent 群聊协作平台
-├── 游戏.html      # 108 Agent 文字冒险游戏引擎
-├── 小说.html      # 21 子 Agent 小说创作系统
-├── 色色.html      # 成人叙事驱动 Pro
-├── 脏话.html      # 攻击文本生成器 v6.0
-├── README.md      # 本文件
-└── LICENSE        # MIT
-
 ## License
 
 MIT @ 2026
