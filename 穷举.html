@@ -760,7 +760,7 @@ function computeAgentCounts(level) {
   const reasoning = level === 9 ? total : Math.min(total, limits[level]);
   let attack = 0;
   if (level >= 4) {
-    const ratios = [0,0,0,0,0.25,0.40,0.33,0.30,0,0];
+    const ratios = [0,0,0,0,0.25,0.40,0.33,0.30,0.20,0.10];
     attack = Math.floor(reasoning * ratios[level]);
   }
   const tokPerAgent = STATE.settings.reasoningEffort === 'max' ? 2800 : 1900;
