@@ -1,0 +1,2957 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>穷举推理网格</title>
+<style>
+:root {
+  --bg: #000000;
+  --panel: #0a0a0a;
+  --border: #1a1a1a;
+  --border-hover: #333333;
+  --text: #ffffff;
+  --text-secondary: #999999;
+  --text-weak: #555555;
+  --accent: #ffffff;
+  --danger: #ff4444;
+  --pass: #44ff44;
+  --warn: #ff8844;
+  --branch-a: #4488ff;
+  --branch-b: #ff8844;
+  --branch-c: #aa66ff;
+  --font-main: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-mono: 'SF Mono', 'Cascadia Code', 'Consolas', 'Menlo', monospace;
+  --radius: 4px;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{
+  background:var(--bg);color:var(--text);
+  font-family:var(--font-main);font-size:13px;line-height:1.6;
+  -webkit-font-smoothing:antialiased;overflow:hidden;height:100vh;height:100dvh;
+}
+input,textarea,select,button{
+  font-family:inherit;font-size:inherit;background:var(--panel);
+  color:var(--text);border:1px solid var(--border);outline:none;
+  border-radius:var(--radius);padding:8px 12px;
+}
+input:focus,textarea:focus,select:focus{border-color:var(--border-hover);}
+button{cursor:pointer;transition:all 0.15s;}
+button:hover{border-color:var(--text);}
+button:active{opacity:0.8;}
+textarea{resize:vertical;min-height:80px;width:100%;max-width:100%;box-sizing:border-box;}
+select{cursor:pointer;appearance:none;-webkit-appearance:none;padding-right:24px;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23999999' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'%3E%3C/path%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 8px center;
+}
+::-webkit-scrollbar{width:4px;height:4px;}
+::-webkit-scrollbar-track{background:var(--bg);}
+::-webkit-scrollbar-thumb{background:var(--border-hover);border-radius:2px;}
+
+.app{display:grid;height:100vh;height:100dvh;}
+@media(min-width:1280px){
+  .app{grid-template-rows:48px 1fr 32px;grid-template-columns:minmax(340px, 420px) 1fr;
+    grid-template-areas:"header header""sidebar main""status status";}
+}
+@media(max-width:1279px){
+  .app{display:flex;flex-direction:column;height:100vh;height:100dvh;}
+  .header{flex-shrink:0;}
+  .tab-bar{flex-shrink:0;display:flex!important;}
+  .sidebar{
+    flex:1;min-height:0;width:100%;max-width:100%;
+    display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden;
+    background:var(--panel);padding:12px;border-right:none;
+  }
+  .sidebar.mobile-hidden{display:none!important;}
+  .main-area{
+    flex:1;min-height:0;width:100%;max-width:100%;
+    display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden;padding:16px;
+  }
+  .main-area.mobile-hidden{display:none!important;}
+  .statusbar{flex-shrink:0;}
+}
+
+.header{
+  grid-area:header;display:flex;align-items:center;justify-content:space-between;
+  padding:0 16px;background:var(--panel);border-bottom:1px solid var(--border);
+  font-weight:600;font-size:14px;letter-spacing:0.5px;z-index:100;
+}
+.header .title{color:var(--text);}
+.header .header-actions{display:flex;gap:6px;}
+.header .header-actions button{
+  background:transparent;border:1px solid var(--border);color:var(--text-secondary);
+  padding:4px 10px;font-size:11px;border-radius:var(--radius);
+}
+.header .header-actions button:hover{color:var(--text);border-color:var(--text);}
+
+.sidebar{
+  grid-area:sidebar;display:flex;flex-direction:column;overflow-y:auto;
+  background:var(--panel);border-right:1px solid var(--border);padding:12px;
+  min-height:0;
+}
+.main-area{grid-area:main;display:flex;flex-direction:column;overflow-y:auto;padding:16px;min-height:0;}
+.statusbar{
+  grid-area:status;display:flex;align-items:center;justify-content:space-between;
+  padding:0 12px;background:var(--panel);border-top:1px solid var(--border);
+  font-size:11px;color:var(--text-secondary);gap:8px;z-index:100;
+}
+
+.tab-bar{display:none;border-bottom:1px solid var(--border);flex-shrink:0;}
+.tab-bar button{
+  flex:1;padding:10px;background:transparent;border:none;border-bottom:2px solid transparent;
+  color:var(--text-secondary);font-size:13px;
+}
+.tab-bar button.active{border-bottom-color:var(--text);color:var(--text);}
+
+.section{margin-bottom:16px;}
+.section-title{
+  font-size:11px;font-weight:600;
+  color:var(--text-weak);margin-bottom:8px;
+}
+.constraint-item{
+  display:flex;align-items:center;gap:8px;padding:6px 8px;
+  background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:4px;
+}
+.constraint-item span{flex:1;font-size:12px;}
+.constraint-item button{
+  background:transparent;border:none;color:var(--text-weak);cursor:pointer;
+  font-size:14px;padding:0 4px;line-height:1;
+}
+.constraint-item button:hover{color:var(--danger);}
+
+.dim-group{margin-bottom:6px;}
+.dim-group-header{
+  display:flex;align-items:center;gap:6px;padding:4px 0;
+  font-size:12px;color:var(--text-secondary);cursor:pointer;user-select:none;
+}
+.dim-group-header .arrow{font-size:10px;transition:transform 0.2s;}
+.dim-group-header .arrow.open{transform:rotate(90deg);}
+.dim-group-body{padding-left:12px;display:none;}
+.dim-group-body.open{display:block;}
+.dim-tags{display:flex;flex-wrap:wrap;gap:4px;}
+.dim-tag{
+  padding:2px 8px;font-size:10px;border:1px solid var(--border);border-radius:10px;
+  cursor:pointer;color:var(--text-secondary);background:var(--bg);
+  transition:all 0.15s;user-select:none;
+}
+.dim-tag.selected{background:var(--text);color:var(--bg);border-color:var(--text);}
+.dim-tag:hover:not(.selected){border-color:var(--border-hover);}
+
+.level-slider-container{padding:8px 0;}
+.level-slider{
+  -webkit-appearance:none;width:100%;height:4px;background:var(--border);
+  border-radius:2px;outline:none;
+}
+.level-slider::-webkit-slider-thumb{
+  -webkit-appearance:none;width:16px;height:16px;background:var(--text);
+  border-radius:50%;cursor:pointer;border:none;
+}
+.level-labels{display:flex;justify-content:space-between;font-size:9px;color:var(--text-weak);margin-top:2px;gap:2px;overflow-x:auto;}
+.level-info-card{
+  background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);
+  padding:10px 12px;margin-top:8px;
+}
+.level-info-card .row{display:flex;justify-content:space-between;padding:2px 0;font-size:11px;}
+.level-info-card .row .label{color:var(--text-weak);}
+.level-info-card .row .value{color:var(--text);}
+
+.btn-primary{
+  background:var(--text);color:var(--bg);border:none;
+  padding:10px 20px;font-size:13px;font-weight:600;border-radius:var(--radius);
+  width:100%;
+}
+.btn-primary:hover{background:var(--text-secondary);color:var(--bg);}
+.btn-primary:disabled{opacity:0.4;cursor:not-allowed;}
+.btn-interrupt{
+  background:var(--danger);color:var(--text);border:none;
+  padding:6px 16px;font-size:12px;font-weight:600;border-radius:var(--radius);
+  animation:pulse 2s ease infinite;
+}
+.btn-resume{
+  background:transparent;color:var(--text);border:1px solid var(--text);
+  padding:6px 16px;font-size:12px;font-weight:600;border-radius:var(--radius);
+  animation:blink 1.5s ease infinite;
+}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.6}}
+@keyframes blink{0%,100%{border-color:var(--text)}50%{border-color:var(--border)}}
+
+.result-cluster{
+  background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);
+  padding:12px;margin-bottom:8px;
+}
+.result-cluster .cluster-header{
+  display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;
+}
+.result-cluster .cluster-label{font-weight:600;font-size:14px;}
+.result-cluster .cluster-pct{font-size:14px;color:var(--text-secondary);}
+.result-cluster .cluster-bar{
+  height:4px;background:var(--border);border-radius:2px;margin:6px 0;overflow:hidden;
+}
+.result-cluster .cluster-bar-fill{height:100%;border-radius:2px;transition:width 0.3s;}
+.result-cluster .cluster-detail{font-size:11px;color:var(--text-secondary);}
+.result-cluster .cluster-detail span{color:var(--text);margin-right:12px;}
+
+.fork-display{
+  background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);
+  padding:12px;margin-bottom:8px;font-size:12px;
+}
+.fork-display .fork-step{color:var(--accent);font-weight:600;}
+.fork-display .fork-dim{display:inline-block;padding:2px 8px;margin:2px;
+  border:1px solid var(--border);border-radius:10px;font-size:10px;color:var(--text-secondary);}
+
+.modal-overlay{
+  position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);
+  z-index:200;display:flex;align-items:center;justify-content:center;padding:20px;
+}
+.modal-box{
+  background:var(--panel);border:1px solid var(--border);border-radius:8px;
+  padding:24px;max-width:500px;width:100%;max-height:80vh;overflow-y:auto;
+}
+.modal-box h2{font-size:16px;margin-bottom:16px;color:var(--text);}
+.modal-box .modal-actions{display:flex;gap:8px;margin-top:16px;justify-content:flex-end;}
+.modal-box .modal-actions button{padding:8px 16px;font-size:12px;}
+
+.debug-panel{
+  position:fixed;bottom:32px;left:8px;right:8px;z-index:150;
+  background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);
+  max-height:300px;display:flex;flex-direction:column;
+}
+.debug-toolbar{
+  display:flex;gap:4px;padding:4px 8px;border-bottom:1px solid var(--border);
+  flex-wrap:wrap;align-items:center;
+}
+.debug-filter-btn{
+  background:var(--panel);border:1px solid var(--border);color:var(--text-weak);
+  padding:2px 8px;font-size:10px;border-radius:2px;cursor:pointer;font-family:var(--font-mono);
+}
+.debug-filter-btn.active{background:var(--text);color:var(--bg);border-color:var(--text);}
+.debug-log-lines{
+  flex:1;overflow-y:auto;overflow-x:auto;padding:4px 0;
+  font-family:var(--font-mono);font-size:10px;
+}
+.debug-log-line{padding:1px 8px;white-space:nowrap;min-width:max-content;cursor:default;}
+.debug-log-line:hover{background:rgba(255,255,255,0.03);}
+
+.progress-bar-container{width:100%;height:2px;background:var(--border);margin:4px 0;border-radius:1px;overflow:hidden;}
+.progress-bar-fill{height:100%;background:var(--text);transition:width 0.3s;}
+
+.hidden{display:none!important;}
+.flex-row{display:flex;gap:8px;align-items:center;}
+.flex-1{flex:1;}
+.text-secondary{color:var(--text-secondary);}
+.text-weak{color:var(--text-weak);}
+.text-xs{font-size:10px;}
+.mt-4{margin-top:4px;}
+.mt-8{margin-top:8px;}
+.mt-16{margin-top:16px;}
+.mb-8{margin-bottom:8px;}
+.gap-4{gap:4px;}
+.gap-8{gap:8px;}
+</style>
+</head>
+<body>
+
+<div class="app" id="app">
+  <!-- Header -->
+  <div class="header">
+    <span class="title">穷举推理网格</span>
+    <div class="header-actions">
+      <button id="settingsBtn">设置</button>
+<button id="debugToggleBtn">调试</button>
+
+    </div>
+  </div>
+
+  <!-- Tab bar (mobile) -->
+  <div class="tab-bar" id="tabBar">
+    <button class="active" data-tab="input">输入</button>
+<button data-tab="result">结果</button>
+
+  </div>
+
+  <!-- Sidebar / Input -->
+  <div class="sidebar" id="sidebar">
+    <!-- Situation -->
+    <div class="section">
+      <div class="section-title">情境描述</div>
+<textarea id="situationInput" placeholder="描述你要分析的决策情境...&#10;&#10;例如：我想换工作。目前薪资35万，在深圳。目标是技术成长。不接受降薪。不搬家。"></textarea>
+
+    </div>
+
+    <!-- Hard Constraints -->
+    <div class="section">
+      <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;">
+    硬约束
+    <button id="aiExtractBtn" style="font-size:10px;padding:2px 8px;background:transparent;border:1px solid var(--border);color:var(--text-weak);border-radius:var(--radius);">AI提取</button>
+</div>
+<div id="constraintsList"></div>
+<button id="addConstraintBtn" style="font-size:10px;padding:2px 8px;background:transparent;border:1px solid var(--border);color:var(--text-weak);border-radius:var(--radius);margin-top:4px;">+ 添加约束</button>
+
+    </div>
+
+    <!-- Dimensions -->
+    <div class="section">
+      <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;">
+    维度配置
+    <button id="resetDimsBtn" style="font-size:10px;padding:2px 8px;background:transparent;border:1px solid var(--border);color:var(--text-weak);border-radius:var(--radius);">重置</button>
+</div>
+<div style="margin-bottom:8px;">
+  <label style="font-size:10px;color:var(--text-weak);">决策领域</label>
+  <select id="domainSelect" style="width:100%;margin-top:2px;">
+    <option value="A">商业/职业</option>
+    <option value="B">个人生命</option>
+    <option value="C">关系/情感</option>
+    <option value="D">伦理/道德</option>
+    <option value="E">技术/工程</option>
+  </select>
+</div>
+<div id="dimensionsContainer"></div>
+<button id="addCustomDimBtn" style="font-size:10px;padding:2px 8px;background:transparent;border:1px solid var(--border);color:var(--text-weak);border-radius:var(--radius);margin-top:4px;">+ 自定义维度</button>
+
+    </div>
+
+    <!-- Level -->
+    <div class="section">
+      <div class="section-title">推演等级</div>
+      <div class="level-slider-container">
+        <input type="range" class="level-slider" id="levelSlider" min="0" max="9" value="3" step="1">
+        <div class="level-labels">
+          <span>L0</span><span>L1</span><span>L2</span><span>L3</span><span>L4</span>
+          <span>L5</span><span>L6</span><span>L7</span><span>L8</span><span>L9</span>
+        </div>
+      </div>
+      <div class="level-info-card" id="levelInfoCard"></div>
+    </div>
+
+    <!-- Actions -->
+    <div style="display:flex;gap:8px;">
+      <button class="btn-primary" id="probeBtn" style="flex:1;background:var(--panel);color:var(--text);border:1px solid var(--border);font-weight:400;">约束探测</button>
+<button class="btn-primary" id="runBtn" style="flex:2;">运行</button>
+
+    </div>
+    <div style="margin-top:8px;display:flex;gap:8px;">
+      <button id="interruptBtn" class="hidden" style="flex:1;">中断</button>
+    </div>
+  </div>
+
+  <!-- Main / Result -->
+  <div class="main-area" id="mainArea">
+    <!-- Session History -->
+    <div id="sessionHistoryBar" style="display:flex;align-items:center;gap:8px;margin-bottom:12px;padding:6px 10px;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);">
+      <span style="font-size:11px;color:var(--text-weak);flex-shrink:0;">历史记录</span>
+      <select id="sessionHistorySelect" style="flex:1;font-size:11px;padding:4px 8px;min-width:0;">
+        <option value="">-- 选择历史会话 --</option>
+      </select>
+      <button id="deleteSessionBtn" style="font-size:10px;padding:3px 8px;background:transparent;border:1px solid var(--border);color:var(--text-weak);border-radius:var(--radius);flex-shrink:0;" disabled>删除</button>
+    </div>
+
+    <div id="resultEmpty" style="text-align:center;color:var(--text-weak);margin-top:80px;">
+    <div style="font-size:48px;margin-bottom:16px;opacity:0.3;">[]</div>
+    <div style="font-size:14px;">运行推演以查看结果</div>
+    <div style="font-size:11px;margin-top:4px;">从约束探测开始检查你的约束</div>
+</div>
+
+    <div id="resultContent" class="hidden">
+      <canvas id="heatmapCanvas" width="560" height="280" style="width:100%;max-width:560px;height:auto;margin-bottom:16px;display:block;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);"></canvas>
+      <div id="resultSummary" style="font-size:11px;color:var(--text-weak);margin-bottom:12px;"></div>
+      <div id="clustersContainer"></div>
+      <div id="forkContainer"></div>
+      <div id="premiseContainer"></div>
+      <div id="resultActions" style="display:flex;gap:8px;margin-top:12px;">
+        <button id="upgradeBtn" style="flex:1;font-size:11px;">升级等级</button>
+	<button id="exportBtn" style="flex:1;font-size:11px;">导出报告</button>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Debug Panel (fixed overlay, accessible from any tab) -->
+  <div class="debug-panel hidden" id="debugPanel">
+    <div class="debug-toolbar" id="debugToolbar"></div>
+    <div class="debug-log-lines" id="debugLogLines"></div>
+  </div>
+
+  <!-- Status Bar -->
+  <div class="statusbar" id="statusBar">
+    <span id="statusText">就绪</span>
+    <span id="statusStats"></span>
+  </div>
+</div>
+
+<!-- Settings Modal -->
+<div class="modal-overlay hidden" id="settingsModal">
+  <div class="modal-box">
+    <h2>API 设置</h2>
+    <div style="margin-bottom:12px;">
+      <label style="font-size:11px;color:var(--text-weak);">接口地址</label>
+      <input type="text" id="baseUrlInput" value="https://api.deepseek.com" style="width:100%;margin-top:2px;">
+    </div>
+    <div style="margin-bottom:12px;">
+      <label style="font-size:11px;color:var(--text-weak);">API 密钥</label>
+      <input type="password" id="apiKeyInput" placeholder="sk-..." style="width:100%;margin-top:2px;">
+    </div>
+    <div style="margin-bottom:12px;">
+      <label style="font-size:11px;color:var(--text-weak);">模型</label>
+      <select id="modelSelect" style="width:100%;margin-top:2px;">
+        <option value="deepseek-v4-flash">deepseek-v4-flash (默认)</option>
+        <option value="deepseek-v4-pro">deepseek-v4-pro</option>
+        <option value="__custom__">自定义模型...</option>
+      </select>
+      <input type="text" id="customModelInput" placeholder="输入自定义模型名称..." style="width:100%;margin-top:4px;" class="hidden">
+    </div>
+    <div style="margin-bottom:12px;">
+      <label style="font-size:11px;color:var(--text-weak);">思考强度</label>
+      <select id="reasoningSelect" style="width:100%;margin-top:2px;">
+        <option value="high">high (默认)</option>
+        <option value="max">max (+80% token)</option>
+      </select>
+    </div>
+    <div style="margin-bottom:12px;">
+      <label style="font-size:11px;color:var(--text-weak);">并发模式</label>
+      <select id="concurrencySelect" style="width:100%;margin-top:2px;">
+        <option value="adaptive">自适应 (推荐)</option>
+        <option value="10">保守 (10)</option>
+        <option value="50">激进 (50)</option>
+        <option value="200">极限 (200)</option>
+      </select>
+    </div>
+    <div style="margin-bottom:12px;">
+      <label style="font-size:11px;color:var(--text-weak);">最大Token</label>
+      <input type="number" id="maxTokensInput" value="382000" min="100" max="2000000" step="100" style="width:100%;margin-top:2px;">
+    </div>
+    <div style="font-size:10px;color:var(--text-weak);margin-bottom:8px;" id="settingsStatus"></div>
+    <div class="modal-actions">
+      <button id="testConnectionBtn">测试连接</button>
+      <button id="saveSettingsBtn" class="btn-primary" style="width:auto;">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm Modal -->
+<div class="modal-overlay hidden" id="confirmModal">
+  <div class="modal-box" id="confirmContent"></div>
+</div>
+
+<script>
+// ============================================================
+// INFERENCE GRID - COMPLETE SYSTEM
+// ============================================================
+
+// ─── STATE ───────────────────────────────────────────────────
+const STATE = {
+  settings: {
+    baseUrl: 'https://api.deepseek.com',
+    apiKey: '',
+    model: 'deepseek-v4-flash',
+    customModel: '',
+    reasoningEffort: 'high',
+    concurrencyMode: 'adaptive',
+    concurrencyLimit: 10,
+    maxTokens: 382000
+  },
+  running: false,
+  paused: false,
+  sessionId: null,
+  completedAgents: 0,
+  totalAgents: 0,
+  probeDone: false,
+  probeConvergence: 0,
+  clusters: [],
+  forkInfo: null,
+  currentLevel: 3,
+  debugVisible: false,
+  _runtimeUnknowns: null
+};
+
+// ─── PERSISTENCE ─────────────────────────────────────────────
+const DB = {
+  _db: null,
+  async open() {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open('InferenceGrid', 2);
+      req.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains('sessions')) {
+          db.createObjectStore('sessions', { keyPath: 'id' });
+        }
+        if (!db.objectStoreNames.contains('agentResults')) {
+          const store = db.createObjectStore('agentResults', { keyPath: 'agentId' });
+          store.createIndex('sessionId', 'sessionId', { unique: false });
+        }
+        if (!db.objectStoreNames.contains('snapshots')) {
+          db.createObjectStore('snapshots', { keyPath: 'id' });
+        }
+        if (!db.objectStoreNames.contains('settings')) {
+          db.createObjectStore('settings', { keyPath: 'key' });
+        }
+      };
+      req.onsuccess = (e) => { this._db = e.target.result; resolve(this._db); };
+      req.onerror = (e) => reject(e.target.error);
+    });
+  },
+  async getSettings() {
+    const tx = this._db.transaction('settings', 'readonly');
+    return new Promise((resolve) => {
+      const req = tx.objectStore('settings').get('apiSettings');
+      req.onsuccess = () => resolve(req.result?.value || null);
+      req.onerror = () => resolve(null);
+    });
+  },
+  async saveSettings(value) {
+    const tx = this._db.transaction('settings', 'readwrite');
+    tx.objectStore('settings').put({ key: 'apiSettings', value });
+    return new Promise((resolve) => { tx.oncomplete = resolve; });
+  },
+  async saveAgentResults(records) {
+    const tx = this._db.transaction('agentResults', 'readwrite');
+    const store = tx.objectStore('agentResults');
+    for (const r of records) store.put(r);
+    return new Promise((resolve) => { tx.oncomplete = resolve; });
+  },
+  async getAgentResults(sessionId) {
+    const tx = this._db.transaction('agentResults', 'readonly');
+    const index = tx.objectStore('agentResults').index('sessionId');
+    const results = [];
+    return new Promise((resolve) => {
+      index.openCursor(IDBKeyRange.only(sessionId)).onsuccess = (e) => {
+        const cursor = e.target.result;
+        if (cursor) { results.push(cursor.value); cursor.continue(); }
+        else resolve(results);
+      };
+    });
+  },
+  async saveSnapshot(snapshot) {
+    const tx = this._db.transaction('snapshots', 'readwrite');
+    tx.objectStore('snapshots').put(snapshot);
+    return new Promise((resolve) => { tx.oncomplete = resolve; });
+  },
+  async getSnapshot(id) {
+    const tx = this._db.transaction('snapshots', 'readonly');
+    return new Promise((resolve) => {
+      const req = tx.objectStore('snapshots').get(id);
+      req.onsuccess = () => resolve(req.result || null);
+    });
+  },
+  async clearSession(sessionId) {
+    const tx = this._db.transaction('agentResults', 'readwrite');
+    const index = tx.objectStore('agentResults').index('sessionId');
+    const keys = [];
+    return new Promise((resolve) => {
+      index.openKeyCursor(IDBKeyRange.only(sessionId)).onsuccess = (e) => {
+        const cursor = e.target.result;
+        if (cursor) { keys.push(cursor.primaryKey); cursor.continue(); }
+        else {
+          for (const key of keys) tx.objectStore('agentResults').delete(key);
+          resolve();
+        }
+      };
+    });
+  },
+
+  async listSessions() {
+    const tx = this._db.transaction('sessions', 'readonly');
+    const store = tx.objectStore('sessions');
+    const sessions = [];
+    return new Promise((resolve) => {
+      store.openCursor().onsuccess = (e) => {
+        const cursor = e.target.result;
+        if (cursor) { sessions.push(cursor.value); cursor.continue(); }
+        else resolve(sessions.sort((a, b) => b.timestamp - a.timestamp));
+      };
+    });
+  },
+
+  async saveSession(session) {
+    const tx = this._db.transaction('sessions', 'readwrite');
+    tx.objectStore('sessions').put(session);
+    return new Promise((resolve) => { tx.oncomplete = resolve; });
+  },
+
+  async deleteSession(sessionId) {
+    // 删除 session 记录
+    const tx1 = this._db.transaction('sessions', 'readwrite');
+    tx1.objectStore('sessions').delete(sessionId);
+    await new Promise((resolve) => { tx1.oncomplete = resolve; });
+    // 删除对应 agentResults
+    const tx2 = this._db.transaction('agentResults', 'readwrite');
+    const index = tx2.objectStore('agentResults').index('sessionId');
+    const keys = [];
+    await new Promise((resolve) => {
+      index.openKeyCursor(IDBKeyRange.only(sessionId)).onsuccess = (e) => {
+        const cursor = e.target.result;
+        if (cursor) { keys.push(cursor.primaryKey); cursor.continue(); }
+        else resolve();
+      };
+    });
+    const store = tx2.objectStore('agentResults');
+    for (const key of keys) store.delete(key);
+    await new Promise((resolve) => { tx2.oncomplete = resolve; });
+    // 删除对应 snapshot
+    const tx3 = this._db.transaction('snapshots', 'readwrite');
+    tx3.objectStore('snapshots').delete(sessionId);
+    await new Promise((resolve) => { tx3.oncomplete = resolve; });
+  }
+};
+
+// ─── DEBUG LOGGER ────────────────────────────────────────────
+class DebugLogger {
+  constructor() {
+    this.entries = [];
+    this.listeners = [];
+    this.startTime = Date.now();
+  }
+  _add(category, level, msg, detail = {}, agentId = null) {
+    const e = {
+      id: this.entries.length, elapsed: Date.now() - this.startTime,
+      category, level, agentId, message: msg, detail
+    };
+    this.entries.push(e);
+    for (const fn of this.listeners) fn(e);
+    return e;
+  }
+  apiReq(id, model, tok) { return this._add('API', 'INFO', `Agent#${id} REQ ${model}`, { agentId: id, model, tokens: tok }, id); }
+  apiRes(id, code, lat, tok) {
+    const lv = code === 200 ? 'INFO' : code === 429 ? 'WARN' : 'ERROR';
+    return this._add('API', lv, `Agent#${id} ${code} (${lat}ms, ${tok} tok)`, { agentId: id, status: code, latency: lat, tokens: tok }, id);
+  }
+  parseOK(id, method = 'first') { return this._add('PARSE', 'INFO', `Agent#${id} parse OK (${method})`, { agentId: id, method }, id); }
+  parseFail(id, err, attempt) { return this._add('PARSE', 'ERROR', `Agent#${id} parse FAIL (attempt ${attempt})`, { agentId: id, error: err }, id); }
+  retry(id, reason) { return this._add('RETRY', 'WARN', `Agent#${id} retry: ${reason}`, { agentId: id, reason }, id); }
+  replaced(id, newId, reason) { return this._add('RETRY', 'WARN', `Agent#${id} replaced by #${newId}: ${reason}`, { oldId: id, newId, reason }); }
+  discarded(id) { return this._add('RETRY', 'ERROR', `Agent#${id} discarded`, { agentId: id }, id); }
+  struct(id, issues) {
+    const lv = issues === 0 ? 'INFO' : 'WARN';
+    return this._add('STRUCT', lv, `Agent#${id} structure: ${issues} issues`, { agentId: id, issues }, id);
+  }
+  cluster(summary) { return this._add('CLUSTER', 'INFO', `Cluster: ${summary}`, { summary }); }
+  attack(target, done, total) { return this._add('ATTACK', 'INFO', `Attack ${target}: ${done}/${total}`, { target, done, total }); }
+  throttle(conc, backoff) { return this._add('THROTTLE', 'WARN', `Throttle: concurrency -> ${conc}, backoff ${backoff}s`, { concurrency: conc, backoff }); }
+  snapshot(saved, total) { return this._add('SYS', 'INFO', `Snapshot: ${saved}/${total}`, { saved, total }); }
+  probe(result, ok) {
+    const lv = ok ? 'INFO' : 'WARN';
+    return this._add('PROBE', lv, `Probe: convergence ${result}%, ${ok ? 'PASS' : 'BLOCK'}`, { convergence: result, passed: ok });
+  }
+  cacheHit(id) { return this._add('CACHE', 'INFO', `Agent#${id} cache HIT`, { agentId: id }, id); }
+  sys(msg) { return this._add('SYS', 'INFO', msg, {}); }
+
+  filter({ category, level, search }) {
+    let r = this.entries;
+    if (category && category !== 'ALL') r = r.filter(e => e.category === category);
+    if (level) r = r.filter(e => e.level === level);
+    if (search) { const q = search.toLowerCase(); r = r.filter(e => e.message.toLowerCase().includes(q)); }
+    return r;
+  }
+  stats() {
+    const cats = {}, lvs = { INFO: 0, WARN: 0, ERROR: 0 };
+    for (const e of this.entries) { cats[e.category] = (cats[e.category] || 0) + 1; lvs[e.level]++; }
+    return { total: this.entries.length, byCategory: cats, byLevel: lvs };
+  }
+  export() { return JSON.stringify(this.entries, null, 2); }
+  onUpdate(fn) { this.listeners.push(fn); }
+}
+
+const logger = new DebugLogger();
+
+// ─── DIMENSION SYSTEM ────────────────────────────────────────
+const CORE_DIMS = {
+  timescale: { label: '时间尺度', values: ['1天','1周','1月','1季度','1年','3年','10年','一生'], selected: [0,1,2,3,4,5,6,7] },
+  layer: { label: '关注层级', values: ['自我','亲密关系','家庭','社群','组织','行业','国家','人类'], selected: [0,1,2,3,4,5,6,7] },
+  info: { label: '信息完备度', values: ['全知','信息充分','信息不足','信息扭曲','完全未知'], selected: [0,1,2,3,4] },
+  risk: { label: '风险取向', values: ['追求风险','风险中性','规避风险','损失厌恶'], selected: [0,1,2,3] },
+  value: { label: '价值优先级', values: ['安全','自由','归属','成就','公平','忠诚','享乐','超越'], selected: [0,1,2,3,4,5,6,7] }
+};
+
+const DOMAIN_DEFS = {
+  A: { name: '商业/职业', dims: {
+    role: { label: '角色', values: ['决策者','执行者','受益者','受损者','竞争者','监管者','投资者','客户'], selected: [0,1,2,3,4,5,6,7] },
+    assumption: { label: '假设', values: ['增长','衰退','政策利好','政策收紧','技术突破','技术停滞','资本充裕','资本紧缩'], selected: [0,1,2,3,4,5,6,7] },
+    framework: { label: '框架', values: ['第一性原理','类比','博弈论','系统思维','逆向思维','边际分析','复利思维'], selected: [0,1,2,3,4,5,6] },
+    stance: { label: '立场', values: ['短期股东','长期股东','员工','管理层','客户','公众'], selected: [0,1,2,3,4,5] }
+  }},
+  B: { name: '个人生命', dims: {
+    role: { label: '角色', values: ['现在的我','理想的我','恐惧的我','5年后的我','他人眼中的我','家人','导师'], selected: [0,1,2,3,4,5,6] },
+    assumption: { label: '假设', values: ['我能改变','我不能改变','环境会变','环境不会变','我有时间','时间不多了'], selected: [0,1,2,3,4,5] },
+    framework: { label: '框架', values: ['后果权衡','人生叙事一致','遗憾最小化','能力圈','反脆弱'], selected: [0,1,2,3,4] },
+    stance: { label: '立场', values: ['体验派','成就派','关系派','自由派','安稳派'], selected: [0,1,2,3,4] }
+  }},
+  C: { name: '关系/情感', dims: {
+    role: { label: '角色', values: ['我','对方','关系中','旁观亲友','未来伴侣','未来子女','过去受伤的我'], selected: [0,1,2,3,4,5,6] },
+    assumption: { label: '假设', values: ['人会变','人不会变','我能表达','我不能表达','关系可修复','关系不可修复'], selected: [0,1,2,3,4,5] },
+    framework: { label: '框架', values: ['依恋需求','公平互惠','情感记忆','边界建构','成长型关系'], selected: [0,1,2,3,4] },
+    stance: { label: '立场', values: ['维护关系','保护自我','追求真相','维持和平','不留遗憾'], selected: [0,1,2,3,4] }
+  }},
+  D: { name: '伦理/道德', dims: {
+    role: { label: '角色', values: ['行为人','受影响者','裁决者','未来世代','缺席弱者'], selected: [0,1,2,3,4] },
+    assumption: { label: '假设', values: ['后果可计算','后果不可计算','动机比后果重要','后果比动机重要'], selected: [0,1,2,3] },
+    framework: { label: '框架', values: ['后果主义','义务论','德性伦理','关怀伦理','正义论'], selected: [0,1,2,3,4] },
+    stance: { label: '立场', values: ['个体权利','集体福祉','程序正义','实质正义','不伤害优先'], selected: [0,1,2,3,4] }
+  }},
+  E: { name: '技术/工程', dims: {
+    role: { label: '角色', values: ['架构师','维护者','用户','攻击者','后续接手者'], selected: [0,1,2,3,4] },
+    assumption: { label: '假设', values: ['需求可变','需求稳定','技术会演进','技术会过时','团队会变','团队不变'], selected: [0,1,2,3,4,5] },
+    framework: { label: '框架', values: ['第一性原理','复杂度控制','可逆决策','最坏情况','雅格尼原则'], selected: [0,1,2,3,4] },
+    stance: { label: '立场', values: ['开发速度','长期维护','用户体验','安全性','可扩展性'], selected: [0,1,2,3,4] }
+  }}
+};
+
+let activeDomain = 'A';
+let customDimensions = [];
+let dimensionState = JSON.parse(JSON.stringify(CORE_DIMS));
+
+async function autoDetectDomain() {
+  const situation = document.getElementById('situationInput').value.trim();
+  if (!situation || !STATE.settings.apiKey) return;
+  
+  const sysPrompt = `分析以下情境描述，判断它属于哪个决策领域。只输出一个字母。
+A=商业/职业决策（跳槽、投资、公司战略、薪资谈判等）
+B=个人生命决策（手术、移民、学业、人生方向等）
+C=关系/情感决策（婚姻、分手、家庭矛盾等）
+D=伦理/道德决策（举报、隐瞒、两难选择等）
+E=技术/工程决策（技术选型、架构设计等）
+如果无法确定，输出A。`;
+  
+  try {
+    const resp = await callAPI(sysPrompt, situation, 382000, null, 'text');
+    const letter = resp.trim().toUpperCase();
+    if ('ABCDE'.includes(letter)) {
+      activeDomain = letter;
+      document.getElementById('domainSelect').value = letter;
+      renderDimensions();
+      updateLevelInfo();
+      logger.sys(`自动识别领域：${DOMAIN_DEFS[letter]?.name || letter}`);
+    }
+  } catch (e) {
+    // 静默失败，保持默认A
+  }
+}
+
+function getDomainDims() {
+  if (!DOMAIN_DEFS[activeDomain]) return {};
+  const src = DOMAIN_DEFS[activeDomain].dims;
+  const result = {};
+  for (const [key, dim] of Object.entries(src)) {
+    result[key] = {
+      label: dim.label,
+      values: [...dim.values],
+      selected: dim.selected ? [...dim.selected] : dim.values.map((_, i) => i)
+    };
+  }
+  return result;
+}
+
+function getCombinationCount() {
+  let count = 1;
+  for (const key of Object.keys(dimensionState)) {
+    count *= dimensionState[key].selected.length;
+  }
+  const dd = getDomainDims();
+  for (const key of Object.keys(dd)) {
+    count *= dd[key].selected ? dd[key].selected.length : dd[key].values.length;
+  }
+  for (const cd of customDimensions) {
+    count *= cd.selected.length;
+  }
+  return count;
+}
+
+function computeAgentCounts(level) {
+  const total = getCombinationCount();
+  const limits = [10, 50, 200, 500, 2000, 5000, 15000, 50000, 30720, Infinity];
+  const reasoning = level === 9 ? total : Math.min(total, limits[level]);
+  let attack = 0;
+  if (level >= 4) {
+    const ratios = [0,0,0,0,0.25,0.40,0.33,0.30,0,0];
+    attack = Math.floor(reasoning * ratios[level]);
+  }
+  const tokPerAgent = STATE.settings.reasoningEffort === 'max' ? 2800 : 1900;
+  const totalTok = (reasoning + attack + 30) * tokPerAgent;
+  const coverage = total > 0 ? (Math.min(reasoning, total) / total * 100).toFixed(1) : '100';
+  return { reasoning, attack, totalAgents: reasoning + attack, totalTok, coverage, tokPerAgent };
+}
+
+// ─── ANGLE MATRIX GENERATOR ──────────────────────────────────
+function latinHypercubeSample(n, dimSizes) {
+  const samples = [];
+  for (let i = 0; i < n; i++) {
+    const point = [];
+    for (let d = 0; d < dimSizes.length; d++) {
+      const j = (i + Math.floor(Math.random() * n)) % n;
+      point.push((j + Math.random()) / n * dimSizes[d]);
+    }
+    samples.push(point);
+  }
+  return samples;
+}
+
+function generateAngles(count, fullCombo = false, batchStart = 0, batchSize = Infinity) {
+  const coreKeys = Object.keys(dimensionState);
+  const domainDims = getDomainDims();
+  const domainKeys = Object.keys(domainDims);
+  const allDimKeys = [...coreKeys, ...domainKeys, ...customDimensions.map(c => c.name)];
+  const allDimSizes = [
+    ...coreKeys.map(k => dimensionState[k].selected.length),
+    ...domainKeys.map(k => domainDims[k].values.length),
+    ...customDimensions.map(c => c.selected.length)
+  ];
+  
+  const totalCombo = allDimSizes.reduce((a,b) => a*b, 1);
+  const actualCount = fullCombo ? totalCombo : Math.min(count, totalCombo);
+  
+  const angles = [];
+  if (fullCombo) {
+    // 分批生成：先跳到 batchStart，再生成 batchSize 个
+    let indices = allDimSizes.map(() => 0);
+    // 跳到 batchStart
+    let remaining = batchStart;
+    for (let i = 0; i < batchStart && i < totalCombo; i++) {
+      let carry = 1;
+      for (let j = indices.length - 1; j >= 0 && carry; j--) {
+        indices[j]++; carry = 0;
+        if (indices[j] >= allDimSizes[j]) { indices[j] = 0; carry = 1; }
+      }
+    }
+    // 生成 batchSize 个
+    const end = Math.min(batchStart + batchSize, totalCombo);
+    for (let i = batchStart; i < end; i++) {
+      const angle = {};
+      let idx = 0;
+      for (const k of coreKeys) angle[k] = dimensionState[k].selected[indices[idx++]] !== undefined ? dimensionState[k].values[dimensionState[k].selected[indices[idx-1]]] : dimensionState[k].values[0];
+      for (const k of domainKeys) angle[k] = domainDims[k].values[indices[idx++]];
+      for (const cd of customDimensions) angle[cd.name] = cd.selected[indices[idx++]] || cd.values[cd.selected[indices[idx-1]]];
+      angles.push(angle);
+      // Increment indices
+      let carry = 1;
+      for (let j = indices.length - 1; j >= 0 && carry; j--) {
+        indices[j]++; carry = 0;
+        if (indices[j] >= allDimSizes[j]) { indices[j] = 0; carry = 1; }
+      }
+    }
+  } else {
+    const samples = latinHypercubeSample(actualCount, allDimSizes);
+    for (const sample of samples) {
+      const angle = {};
+      let idx = 0;
+      for (const k of coreKeys) {
+        const vi = Math.floor(sample[idx]);
+        const sel = dimensionState[k].selected;
+        angle[k] = dimensionState[k].values[sel.length > 0 ? sel[Math.min(vi, sel.length - 1)] : 0];
+        idx++;
+      }
+      for (const k of domainKeys) {
+        angle[k] = domainDims[k].values[Math.floor(sample[idx]) % domainDims[k].values.length];
+        idx++;
+      }
+      for (const cd of customDimensions) {
+        const vi = Math.floor(sample[idx]);
+        angle[cd.name] = cd.selected[Math.min(vi, cd.selected.length - 1)] || cd.values[0];
+        idx++;
+      }
+      angles.push(angle);
+    }
+  }
+  return angles;
+}
+
+// ─── CONSTRAINT SYSTEM ───────────────────────────────────────
+let hardConstraints = [];
+
+function renderConstraints() {
+  const container = document.getElementById('constraintsList');
+  container.innerHTML = hardConstraints.map((c, i) => `
+    <div class="constraint-item">
+      <span style="cursor:pointer;flex:1;" onclick="editConstraint(${i}, this)" title="点击编辑约束">${c.field} ${c.op || '='} ${c.value}${c.unit || ''}</span>
+      <button onclick="removeConstraint(${i})">x</button>
+    </div>
+  `).join('') + (hardConstraints.length === 0 ? '<div style="font-size:11px;color:var(--text-weak);padding:8px;">暂无约束。使用AI提取或手动添加。</div>' : '');
+}
+
+function editConstraint(i, spanEl) {
+  const c = hardConstraints[i];
+  const original = { ...c };
+  
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.value = `${c.field} ${c.op || '='} ${c.value}${c.unit ? ' ' + c.unit : ''}`;
+  input.style.cssText = 'flex:1;padding:4px 8px;font-size:12px;background:var(--panel);color:var(--text);border:1px solid var(--border-hover);border-radius:var(--radius);';
+  
+  const saveBtn = document.createElement('button');
+  saveBtn.textContent = 'ok';
+  saveBtn.style.cssText = 'background:transparent;border:none;color:var(--pass);cursor:pointer;font-size:12px;padding:0 4px;';
+  
+  const cancelBtn = document.createElement('button');
+  cancelBtn.textContent = 'x';
+  cancelBtn.style.cssText = 'background:transparent;border:none;color:var(--text-weak);cursor:pointer;font-size:12px;padding:0 4px;';
+  
+  const parent = spanEl.parentElement;
+  parent.innerHTML = '';
+  parent.appendChild(input);
+  parent.appendChild(saveBtn);
+  parent.appendChild(cancelBtn);
+  input.focus();
+  input.select();
+  
+  const finish = (save) => {
+    if (save) {
+      const val = input.value.trim();
+      const parts = val.match(/^(\S+)\s*(>=|<=|>|<|=|!=|in)\s*(.+?)(\s+\S+)?$/);
+      if (parts) {
+        c.field = parts[1];
+        c.op = parts[2];
+        c.value = parts[3].trim();
+        c.unit = (parts[4] || '').trim();
+      }
+    } else {
+      hardConstraints[i] = original;
+    }
+    renderConstraints();
+  };
+  
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') finish(true); if (e.key === 'Escape') finish(false); });
+  saveBtn.addEventListener('click', () => finish(true));
+  cancelBtn.addEventListener('click', () => finish(false));
+}
+
+function addConstraint(field, op, value, unit = '') {
+  hardConstraints.push({ field, op, value, unit });
+  renderConstraints();
+}
+
+function removeConstraint(i) {
+  hardConstraints.splice(i, 1);
+  renderConstraints();
+}
+
+document.getElementById('addConstraintBtn').addEventListener('click', () => {
+  const field = prompt('约束字段名（如"薪资"）：');
+  if (!field) return;
+  const op = prompt('操作符（>= = in）：', '>=');
+  if (!op) return;
+  const value = prompt('值：');
+  if (!value) return;
+  const unit = prompt('单位（可选，如"万元"）：', '');
+  addConstraint(field, op, value, unit);
+});
+
+async function aiExtractConstraints() {
+  const situation = document.getElementById('situationInput').value.trim();
+  if (!situation) { alert('请先输入情境。'); return; }
+  if (!STATE.settings.apiKey) { alert('请先在设置中配置API密钥。'); return; }
+  
+  setStatus('正在提取约束...');
+  const sysPrompt = `从用户的情境描述中提取硬约束。
+输出JSON对象：{"constraints":[{"field":"字段","op":"操作符","value":"值","unit":"单位"}]}
+例如：{"constraints":[{"field":"薪资","op":">=","value":"35","unit":"万元"},{"field":"城市","op":"=","value":"深圳","unit":""}]}
+如果没有明确的约束，输出{"constraints":[]}。`;
+  
+  try {
+    const resp = await callAPI(sysPrompt, situation, 382000);
+    let text = extractJSON(resp);
+    let obj;
+    try {
+      obj = JSON.parse(text);
+    } catch (e1) {
+      const fixed = tailFixJSON(resp);
+      if (fixed) {
+        obj = JSON.parse(fixed);
+      } else {
+        throw e1;
+      }
+    }
+    const constraints = obj.constraints || [];
+    if (Array.isArray(constraints) && constraints.length > 0) {
+      hardConstraints = constraints;
+      renderConstraints();
+      logger.sys(`AI extracted ${constraints.length} constraints`);
+    }
+  } catch (e) {
+    logger._add('SYS', 'ERROR', `Constraint extraction failed: ${e.message}`);
+  }
+
+  setStatus('就绪');
+}
+
+document.getElementById('aiExtractBtn').addEventListener('click', async () => {
+  await aiExtractConstraints();
+  await autoDetectDomain();
+});
+
+// Also trigger domain detection when situation input loses focus
+document.getElementById('situationInput').addEventListener('blur', autoDetectDomain);
+
+// ─── API CALLER ──────────────────────────────────────────────
+function extractJSON(text) {
+  const match = text.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
+  return match ? match[0] : text;
+}
+
+
+function tailFixJSON(text) {
+  let s = text.trim();
+  // 如果最后一个 } 在最后一个 { 之前 → JSON被截断
+  // 删除截断点后的不完整内容，让括号补全逻辑处理
+  const lb = s.lastIndexOf('{'); const rb = s.lastIndexOf('}');
+  if (rb < lb && lb !== -1) {
+    // 截断发生在最后一个完整对象之后
+    // 保留到最后一个完整的 } ，如果没有则保留到 { 之前让补全逻辑处理
+    s = rb !== -1 ? s.substring(0, rb + 1) : s.substring(0, lb);
+  }
+  let brace = 0, bracket = 0, inStr = false;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (ch === '"' && (i === 0 || s[i-1] !== '\\')) inStr = !inStr;
+    if (inStr) continue;
+    if (ch === '{') brace++;
+    if (ch === '}') brace--;
+    if (ch === '[') bracket++;
+    if (ch === ']') bracket--;
+  }
+  s += ']'.repeat(Math.max(0, bracket));
+  s += '}'.repeat(Math.max(0, brace));
+  try { JSON.parse(s); return s; } catch(e) { return null; }
+}
+
+async function callAPI(systemPrompt, userMessage, maxTokens = null, agentId = null, responseFormat = 'json_object') {
+  const effectiveMaxTokens = maxTokens ?? (STATE.settings.maxTokens || 382000);
+  const model = STATE.settings.customModel || STATE.settings.model;
+
+  const body = {
+    model,
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userMessage }
+    ],
+    max_tokens: effectiveMaxTokens,
+    response_format: { type: responseFormat },
+    thinking: {
+      type: 'enabled',
+      reasoning_effort: STATE.settings.reasoningEffort
+    }
+  };
+  
+  if (agentId) logger.apiReq(agentId, model, systemPrompt.length + userMessage.length);
+  
+  const start = Date.now();
+  const resp = await fetch(`${STATE.settings.baseUrl}/v1/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${STATE.settings.apiKey}`
+    },
+    body: JSON.stringify(body)
+  });
+  
+  const latency = Date.now() - start;
+  
+  if (!resp.ok) {
+    const errText = await resp.text();
+    if (agentId) logger.apiRes(agentId, resp.status, latency, 0);
+    throw { status: resp.status, message: errText };
+  }
+  
+  const data = await resp.json();
+  const content = data.choices?.[0]?.message?.content || '';
+  const usage = data.usage?.total_tokens || 0;
+  
+  if (agentId) logger.apiRes(agentId, 200, latency, usage);
+  
+  return content;
+}
+
+async function callAgentWithRetry(agentId, systemPrompt, userMessage, maxTokens = 3000, maxRetries = 2) {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const raw = await callAPI(systemPrompt, userMessage, maxTokens, agentId);
+      // Try direct parse
+      let parsed = null;
+      try {
+        parsed = JSON.parse(extractJSON(raw));
+        logger.parseOK(agentId, attempt === 0 ? 'first' : 'ai_fix');
+        return parsed;
+      } catch (e1) {
+        logger.parseFail(agentId, e1.message, attempt + 1);
+        // Tail fix
+        const fixed = tailFixJSON(raw);
+        if (fixed) {
+          try {
+            parsed = JSON.parse(fixed);
+            logger.parseOK(agentId, 'tail_fix');
+            return parsed;
+          } catch (e2) {}
+        }
+        // AI repair
+        if (attempt < maxRetries) {
+          logger.retry(agentId, 'JSON parse fail, requesting AI repair');
+          systemPrompt += `\n\n上一次输出存在JSON解析错误。仅输出合法JSON。`;
+        }
+      }
+    } catch (apiErr) {
+      if (apiErr.status === 429 && attempt < maxRetries) {
+        logger.throttle(STATE.settings.concurrencyLimit, 5);
+        await sleep(5000);
+        continue;
+      }
+      if (attempt >= maxRetries) throw apiErr;
+    }
+  }
+  return null;
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function waitForResume() {
+  return new Promise((resolve) => {
+    const check = () => {
+      if (!STATE.paused) resolve();
+      else if (STATE._cancelled) resolve();
+      else setTimeout(check, 200);
+    };
+    check();
+  });
+}
+
+// ─── ADAPTIVE CONCURRENCY ────────────────────────────────────
+class AdaptiveConcurrency {
+  constructor(initial = 10) {
+    this.max = initial;
+    this.active = 0;
+    this.queue = [];
+    this.latencies = [];
+    this.throttles = 0;
+    this.backoffUntil = 0;
+  }
+  
+  async execute(fn) {
+    return new Promise((resolve, reject) => {
+      this.queue.push({ fn, resolve, reject });
+      this.flush();
+    });
+  }
+  
+  async flush() {
+    while (this.queue.length > 0 && this.active < this.max && Date.now() > this.backoffUntil) {
+      const task = this.queue.shift();
+      this.active++;
+      const start = Date.now();
+      try {
+        const result = await task.fn();
+        const lat = Date.now() - start;
+        this.latencies.push(lat);
+        if (this.latencies.length > 50) this.latencies.shift();
+        if (this.throttles === 0 && this.latencies.length >= 5 && this.avgLatency() < 3000) {
+          this.max = Math.min(this.max + 1, 200);
+        }
+        task.resolve(result);
+      } catch (err) {
+        if (err.status === 429) {
+          this.throttles++;
+          this.max = Math.max(1, Math.floor(this.max / 2));
+          this.backoffUntil = Date.now() + 5000;
+          this.queue.unshift(task);
+        } else if (err.status >= 500) {
+          this.max = Math.max(1, this.max - 1);
+          this.queue.unshift(task);
+        } else {
+          task.reject(err);
+        }
+      } finally {
+        this.active--;
+        this.flush();
+      }
+    }
+  }
+  
+  avgLatency() {
+    return this.latencies.reduce((a,b) => a+b, 0) / (this.latencies.length || 1);
+  }
+}
+
+// ─── AGENT PROMPT TEMPLATE ───────────────────────────────────
+function buildAgentPrompt(angle, agentId) {
+  const dimDesc = Object.entries(angle).map(([k,v]) => `  ${k}: ${v}`).join('\n');
+
+  // 构造角度摘要——强制 LLM 先声明自己从什么视角切入
+  const angleTag = Object.entries(angle).map(([k,v]) => `${k}=${v}`).join(', ');
+
+  const constraintText = hardConstraints.length > 0
+    ? hardConstraints.map(c => `  - ${c.field} ${c.op || '='} ${c.value}${c.unit || ''}`).join('\n')
+    : '  (no hard constraints given)';
+  
+  return {
+    system: `You are reasoning engine #${agentId}. Your unique lens is: [${angleTag}].
+
+You independently reason from this ONE specific lens — your dimensions above define HOW you think, not WHAT you think about. The situation is the same for all agents, but YOUR angle makes you see it differently.
+
+ANGLE (your 9-dimensional lens):
+${dimDesc}
+
+RULES:
+1. Your reasoning MUST be driven by your specific ANGLE dimensions. Different timescale/layer/value/framework choices must produce DIFFERENT conclusions.
+2. When writing your conclusion.action (≤8 Chinese characters), it MUST reflect your ANGLE dimensions above — NEVER write a generic summary of the user's situation. Examples of good labels: "三年行业增长视角", "决策者资本充裕推演", "风险规避自我审视". Examples of BAD labels: "具体工作机会的详细条款", "薪资地点公司综合评估".
+3. At least 2 steps in reasoning_chain must explicitly reference your angle dimensions (e.g., "Given timescale=3年 and risk=规避风险, I focus on long-term stability...").
+4. Do NOT violate any hard constraint.
+5. If you lack critical information, mark it as "unknown" rather than guessing.
+6. You have NO knowledge of other agents. Work independently.
+7. Output STRICT JSON only. No other text.
+
+HARD CONSTRAINTS (boundary conditions — your angle determines which ones matter most):
+${constraintText}
+
+OUTPUT JSON SCHEMA:
+{
+  "reasoning_chain": [
+    {"step": 1, "premise_type": "fact|value_judgment|assumption|constraint", "premise": "...", "operation": "...", "result": "...", "confidence": 0.0-1.0}
+  ],
+  "conclusion": {"action": "short_label", "detail": "detailed description"},
+  "key_assumptions": ["assumption1"],
+  "unknowns": ["missing info needed for better reasoning"],
+  "overall_certainty": 0.0-1.0
+}`,
+    user: document.getElementById('situationInput').value.trim()
+  };
+}
+
+function buildProbePrompt(angle, agentId) {
+  const p = buildAgentPrompt(angle, agentId);
+  p.system = p.system.replace('You are reasoning engine', 'You are a CONSTRAINT PROBE engine');
+  p.system += `\n\nPROBE MODE: Your job is NOT to reach a final conclusion. Test if the given constraints + information are sufficient. If you CAN reason, give a tentative direction. If you CANNOT, precisely mark what information is missing. Output: {"can_reason": true/false, "missing_info": [...], "tentative_direction": "..."|null, "constraint_suggestions": [...]}`;
+  return p;
+}
+
+function buildAttackPrompt(targetConclusion, targetPct, vulnerability, agentId) {
+  return {
+    system: `You are adversarial test engine #${agentId}. Your task: attack the following conclusion.
+
+TARGET CONCLUSION: ${targetConclusion}
+SUPPORT RATE: ${targetPct}%
+
+ATTACK DIRECTION: ${vulnerability.type}: ${vulnerability.target}
+
+Try to make this conclusion collapse by:
+- Negating a key premise
+- Introducing an external shock
+- Finding a plausible extreme scenario
+
+Output STRICT JSON:
+{"attack_type": "premise_negation|external_shock|extreme_scenario", "target": "...", "counterfactual": "if this premise is false, ...", "impact": {"conclusion_reversal": true/false, "confidence_drop": 0.0-1.0}, "plausibility": 0.0-1.0, "reasoning": "..."}`,
+    user: document.getElementById('situationInput').value.trim()
+  };
+}
+
+// ─── CLUSTERING ENGINE ───────────────────────────────────────
+function clusterByConclusion(agents) {
+  const groups = {};
+  for (const a of agents) {
+    if (!a || !a.conclusion) continue;
+    const action = a.conclusion.action || 'unknown';
+    if (!groups[action]) groups[action] = [];
+    groups[action].push(a);
+  }
+  
+  // Merge similar actions
+  const merged = {};
+  const actionMap = {};
+  for (const [action, list] of Object.entries(groups)) {
+    let found = false;
+    for (const [existing, ml] of Object.entries(merged)) {
+      if (jaccardSimilarity(action, existing) > 0.5) {
+        merged[existing] = [...ml, ...list];
+        actionMap[action] = existing;
+        found = true;
+        break;
+      }
+    }
+    if (!found) { merged[action] = list; actionMap[action] = action; }
+  }
+  
+  const total = agents.filter(a => a && a.conclusion).length;
+  const clusters = Object.entries(merged).map(([label, list]) => ({
+    label,
+    size: list.length,
+    pct: total > 0 ? (list.length / total * 100) : 0,
+    agents: list,
+    angleDiversity: computeAngleDiversity(list),
+    structureIntegrity: computeStructureIntegrity(list)
+  }));
+  
+  clusters.sort((a, b) => b.size - a.size);
+  return clusters;
+}
+
+function jaccardSimilarity(a, b) {
+  const setA = new Set(a.toLowerCase().split(/\s+/));
+  const setB = new Set(b.toLowerCase().split(/\s+/));
+  const intersection = new Set([...setA].filter(x => setB.has(x)));
+  const union = new Set([...setA, ...setB]);
+  return intersection.size / (union.size || 1);
+}
+
+function computeAngleDiversity(agents) {
+  if (agents.length <= 1) return 0;
+  const dims = Object.keys(agents[0]?.angle || {});
+  if (dims.length === 0) return 0;
+  let totalEntropy = 0;
+  for (const dim of dims) {
+    const freq = {};
+    for (const a of agents) {
+      const v = a.angle?.[dim] || 'unknown';
+      freq[v] = (freq[v] || 0) + 1;
+    }
+    const n = Object.keys(freq).length;
+    if (n <= 1) { totalEntropy += 0; continue; }
+    const entropy = -Object.values(freq).reduce((s, c) => s + (c/agents.length) * Math.log2(c/agents.length), 0);
+    totalEntropy += entropy / Math.log2(n);
+  }
+  return totalEntropy / dims.length;
+}
+
+function computeStructureIntegrity(agents) {
+  let complete = 0;
+  for (const a of agents) {
+    if (a.reasoning_chain && a.reasoning_chain.length >= 2 && a.key_assumptions && a.unknowns) complete++;
+  }
+  return complete / (agents.length || 1);
+}
+
+function detectFork(clusters) {
+  if (clusters.length < 2) return null;
+  const a = clusters[0], b = clusters[1];
+  if (a.agents.length < 5 || b.agents.length < 5) return null;
+  
+  const maxSteps = Math.max(
+    ...a.agents.map(ag => ag.reasoning_chain?.length || 0),
+    ...b.agents.map(ag => ag.reasoning_chain?.length || 0)
+  );
+  
+  for (let step = 1; step <= maxSteps; step++) {
+    const premsA = new Set(a.agents.map(ag => ag.reasoning_chain?.[step-1]?.premise || '').filter(Boolean));
+    const premsB = new Set(b.agents.map(ag => ag.reasoning_chain?.[step-1]?.premise || '').filter(Boolean));
+    const allA = [...premsA].join(' ').toLowerCase();
+    const allB = [...premsB].join(' ').toLowerCase();
+    const sim = jaccardSimilarity(allA, allB);
+    
+    if (sim < 0.4) {
+      // Find contributing dimensions
+      const dims = Object.keys(a.agents[0]?.angle || {});
+      const contributions = [];
+      for (const dim of dims) {
+        const freqA = {}, freqB = {};
+        for (const ag of a.agents) { const v = ag.angle?.[dim] || ''; freqA[v] = (freqA[v]||0)+1; }
+        for (const ag of b.agents) { const v = ag.angle?.[dim] || ''; freqB[v] = (freqB[v]||0)+1; }
+        let div = 0;
+        const allVals = new Set([...Object.keys(freqA), ...Object.keys(freqB)]);
+        for (const v of allVals) {
+          const pA = (freqA[v]||0) / a.agents.length;
+          const pB = (freqB[v]||0) / b.agents.length;
+          if (pA > 0 && pB > 0) div += pA * Math.log2(pA / pB);
+        }
+        if (div > 0.2) contributions.push({ dim, divergence: div, biasA: mostCommon(freqA), biasB: mostCommon(freqB) });
+      }
+      contributions.sort((x, y) => y.divergence - x.divergence);
+      return { forkStep: step, similarity: sim, contributions: contributions.slice(0, 5) };
+    }
+  }
+  return null;
+}
+
+function mostCommon(freq) {
+  let best = '', bestCount = 0;
+  for (const [k, v] of Object.entries(freq)) {
+    if (v > bestCount) { best = k; bestCount = v; }
+  }
+  return best;
+}
+
+function extractPremiseList(cluster) {
+  const allAssumptions = [];
+  const seen = new Set();
+  for (const a of cluster.agents) {
+    for (const p of (a.key_assumptions || [])) {
+      if (!seen.has(p)) { seen.add(p); allAssumptions.push({ text: p, count: 1 }); }
+      else { const f = allAssumptions.find(x => x.text === p); if (f) f.count++; }
+    }
+  }
+  allAssumptions.sort((a, b) => b.count - a.count);
+  return allAssumptions.slice(0, 8);
+}
+
+// ─── PROBE ───────────────────────────────────────────────────
+async function runProbe() {
+  const situation = document.getElementById('situationInput').value.trim();
+  if (!situation) { alert('请先输入情境。'); return; }
+  if (!STATE.settings.apiKey) { alert('请先在设置中配置API密钥。'); return; }
+  
+  setStatus('正在运行约束探测...');
+  const angles = generateAngles(30);
+  const cc = new AdaptiveConcurrency(STATE.settings.concurrencyLimit);
+  const results = [];
+  
+  const tasks = angles.map((angle, i) => cc.execute(async () => {
+    const p = buildProbePrompt(angle, i);
+    const r = await callAgentWithRetry(`probe_${i}`, p.system, p.user, 1500);
+    if (r) { r.angle = angle; results.push(r); }
+  }));
+  
+  await Promise.all(tasks);
+  
+  const canReason = results.filter(r => r.can_reason).length;
+  const convRate = results.length > 0 ? (canReason / results.length * 100) : 0;
+  STATE.probeConvergence = convRate;
+  STATE.probeDone = true;
+  
+  logger.probe(convRate.toFixed(1), convRate >= 40);
+  
+  if (convRate >= 60) {
+    setStatus(`探测通过 (${convRate.toFixed(0)}% 收敛)。可以运行。`);
+    await showConfirmModal(`
+      <h2>约束探测 - 通过</h2>
+      <div style="color:var(--pass);font-size:14px;margin-bottom:12px;">${convRate.toFixed(0)}% Agent可推理</div>
+      <div style="color:var(--text-secondary);font-size:13px;">约束充足。可以运行正式推演。</div>
+      <div class="modal-actions">
+        <button id="probeOkBtn" class="btn-primary" style="width:auto;">好的</button>
+      </div>
+    `, 'probeOkBtn');
+  } else if (convRate >= 40) {
+    const missing = results.filter(r => !r.can_reason).flatMap(r => r.missing_info || []);
+    const freq = {};
+    for (const m of missing) { freq[m] = (freq[m] || 0) + 1; }
+    const top = Object.entries(freq).sort((a,b) => b[1]-a[1]).slice(0,8);
+    setStatus(`探测偏弱 (${convRate.toFixed(0)}%)。建议补充约束。`);
+    const rows = top.map(([k,v]) => 
+      `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px;color:var(--text-secondary);">
+        <input type="checkbox" class="probe-add-constraint" data-field="${escHtml(k)}" style="accent-color:var(--text);">
+        <span style="flex:1;">${escHtml(k)}</span>
+        <span style="color:var(--text-weak);font-size:10px;">${v} Agent</span>
+      </div>`
+    ).join('');
+    await showConfirmModal(`
+      <h2>约束探测 - 偏弱</h2>
+      <div style="color:var(--warn);font-size:14px;margin-bottom:4px;">仅 ${convRate.toFixed(0)}% Agent可推理</div>
+      <div style="color:var(--text-secondary);font-size:11px;margin-bottom:12px;">选中要添加的缺失约束：</div>
+      <div style="max-height:200px;overflow-y:auto;margin-bottom:12px;">${rows}</div>
+      <div class="modal-actions">
+        <button data-cancel>跳过</button>
+        <button id="probeAddBtn" class="btn-primary" style="width:auto;">添加选中</button>
+      </div>
+    `, 'probeAddBtn', () => {
+      document.getElementById('probeAddBtn').addEventListener('click', () => {
+        document.querySelectorAll('.probe-add-constraint:checked').forEach(cb => {
+          addConstraint(cb.dataset.field, '=', '是', '');
+        });
+        closeConfirmModal();
+      });
+    });
+  } else {
+    const missing = results.filter(r => !r.can_reason).flatMap(r => r.missing_info || []);
+    const freq = {};
+    for (const m of missing) { freq[m] = (freq[m] || 0) + 1; }
+    const top = Object.entries(freq).sort((a,b) => b[1]-a[1]).slice(0,8);
+    setStatus(`探测拦截 (${convRate.toFixed(0)}%)。请先添加约束。`);
+    const rows = top.map(([k,v]) => 
+      `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px;color:var(--text-secondary);">
+        <input type="checkbox" class="probe-add-constraint" data-field="${escHtml(k)}" style="accent-color:var(--text);" checked>
+        <span style="flex:1;">${escHtml(k)}</span>
+        <span style="color:var(--text-weak);font-size:10px;">${v} Agent</span>
+      </div>`
+    ).join('');
+    await showConfirmModal(`
+      <h2>约束探测 - 拦截</h2>
+      <div style="color:var(--danger);font-size:14px;margin-bottom:4px;">仅 ${convRate.toFixed(0)}% Agent可推理</div>
+      <div style="color:var(--text-secondary);font-size:11px;margin-bottom:12px;">选中要添加的缺失约束（已默认全选）：</div>
+      <div style="max-height:200px;overflow-y:auto;margin-bottom:12px;">${rows}</div>
+      <div class="modal-actions">
+        <button data-cancel>跳过</button>
+        <button id="probeAddBtn" class="btn-primary" style="width:auto;">添加选中</button>
+      </div>
+    `, 'probeAddBtn', () => {
+      document.getElementById('probeAddBtn').addEventListener('click', () => {
+        document.querySelectorAll('.probe-add-constraint:checked').forEach(cb => {
+          addConstraint(cb.dataset.field, '=', '是', '');
+        });
+        closeConfirmModal();
+      });
+    });
+  }
+}
+
+// ─── MAIN RUN ─────────────────────────────────────────────────
+async function runInference() {
+  if (STATE.running) return;
+  const situation = document.getElementById('situationInput').value.trim();
+  if (!situation) { alert('请先输入情境。'); return; }
+  if (!STATE.settings.apiKey) { alert('请先在设置中配置API密钥。'); return; }
+  
+  const level = STATE.currentLevel;
+  
+  // Force constraint probe if not yet done
+  if (!STATE.probeDone) {
+    setStatus('运行前必须进行约束探测...');
+    await runProbe();
+    if (STATE.probeConvergence < 40) {
+      // Probe blocked - user must add constraints
+      // runProbe already shows the modal with constraint suggestions
+      setStatus('探测拦截。请补充约束后重试。');
+      return;
+    }
+    if (STATE.probeConvergence < 60) {
+      const proceed = await showConfirmModal(`
+        <h2>约束偏弱</h2>
+        <div style="color:var(--warn);font-size:13px;line-height:1.8;">
+          <div>仅 ${STATE.probeConvergence.toFixed(0)}% Agent可推理。</div>
+          <div style="margin-top:8px;">建议补充约束后再运行。是否强制运行？</div>
+        </div>
+        <div class="modal-actions">
+          <button data-cancel>取消</button>
+          <button id="forceRunBtn" class="btn-primary" style="width:auto;background:var(--warn);">强制运行</button>
+        </div>
+      `, 'forceRunBtn');
+      if (!proceed) return;
+    }
+  }
+
+  // L5+ three-step confirm
+  if (level >= 5 && !await threeStepConfirm(level)) return;
+  // L9 extra confirm
+  if (level== 9 && !await l9ExtraConfirm()) return;
+
+  STATE.running = true;
+  STATE.paused = false;
+  STATE.sessionId = `session_${Date.now()}`;
+  STATE.completedAgents = 0;
+  updateRunButton();
+  
+  // Initialize DB
+  if (!DB._db) await DB.open();
+  
+  // Generate angles
+  setStatus('正在生成角度矩阵...');
+  const counts = computeAgentCounts(level);
+  const fullCombo = level === 9;
+  const BATCH_SIZE = 5000; // 每批5000个，内存安全
+  const totalAngles = fullCombo ? getCombinationCount() : Math.min(counts.reasoning, getCombinationCount());
+  STATE.totalAgents = totalAngles + counts.attack + 30;
+  
+  logger.sys(`Starting L${level}: ${totalAngles} reasoning agents, ${counts.attack} attack agents, ~${formatTokens(counts.totalTok)} tok`);
+
+  // Run reasoning agents (batch by batch for L9 full combo)
+  setStatus(`运行中：${totalAngles} 个推理Agent...`);
+  const cc = new AdaptiveConcurrency(STATE.settings.concurrencyLimit);
+  const reasoningResults = [];
+  let completed = 0;
+
+  // 30秒自动快照定时器
+  const autoSnapshotInterval = setInterval(async () => {
+    if (STATE.running && !STATE.paused && STATE.sessionId) {
+      await saveProgressSnapshot(completed, totalAngles);
+    }
+  }, 30000);
+
+  for (let batchStart = 0; batchStart < totalAngles; batchStart += BATCH_SIZE) {
+    if (STATE.paused) {
+      await waitForResume();
+      if (STATE._cancelled) break;
+    }
+    const batchEnd = Math.min(batchStart + BATCH_SIZE, totalAngles);
+    const batchAngles = generateAngles(batchEnd - batchStart, fullCombo, batchStart, BATCH_SIZE);
+    
+    setStatus(`运行中：${batchStart + 1}-${batchEnd}/${totalAngles} 个推理Agent...`);
+    
+    const batchTasks = batchAngles.map((angle, bi) => {
+      const gi = batchStart + bi;
+      return cc.execute(async () => {
+        if (STATE.paused) {
+          await waitForResume();
+          if (STATE._cancelled) return null;
+        }
+        const p = buildAgentPrompt(angle, gi);
+        const r = await callAgentWithRetry(gi, p.system, p.user, 3000);
+        if (r) {
+          r.angle = angle; r.agentId = gi;
+          // Aggregate unknowns in real-time
+          if (r.unknowns && r.unknowns.length > 0) {
+            if (!STATE._runtimeUnknowns) STATE._runtimeUnknowns = {};
+            for (const u of r.unknowns) {
+              STATE._runtimeUnknowns[u] = (STATE._runtimeUnknowns[u] || 0) + 1;
+            }
+          }
+        }
+        completed++;
+        STATE.completedAgents = completed;
+        updateProgress(completed, totalAngles);
+        if (completed % 500 === 0) {
+          await saveProgressSnapshot(completed, totalAngles);
+        }
+        return r;
+      });
+    });
+    
+    const batchResults = await Promise.all(batchTasks);
+    for (const r of batchResults) {
+      if (r !== null) reasoningResults.push(r);
+    }
+  }
+  
+  const validResults = reasoningResults.filter(r => r !== null);
+  STATE.completedAgents = totalAngles;
+  updateProgress(totalAngles, totalAngles);
+
+  
+  // Save to IndexedDB
+  if (validResults.length > 0) {
+    const records = validResults.map(r => ({
+      agentId: `${STATE.sessionId}_${r.agentId}`,
+      sessionId: STATE.sessionId,
+      angle: r.angle,
+      reasoningChain: r.reasoning_chain,
+      conclusion: r.conclusion,
+      keyAssumptions: r.key_assumptions,
+      unknowns: r.unknowns,
+      overallCertainty: r.overall_certainty,
+      timestamp: Date.now()
+    }));
+    await DB.saveAgentResults(records);
+    logger.sys(`Saved ${records.length} agent results to DB`);
+  }
+  
+  // Cluster
+  setStatus('聚类中...');
+  const clusters = clusterByConclusion(validResults);
+  logger.cluster(clusters.map(c => `${c.label}(${c.pct.toFixed(1)}%)`).join(' '));
+  
+  // Fork detection
+  const forkInfo = detectFork(clusters);
+  
+  // Attack phase (L4+)
+  let attackResults = null;
+  if (level >= 4 && counts.attack > 0) {
+    setStatus(`运行中：${counts.attack} 个对抗Agent...`);
+    const attackTargets = clusters.filter(c => c.pct > 3).slice(0, 3);
+    const attackAgents = [];
+    
+    for (const target of attackTargets) {
+      const targetAttackCount = Math.floor(counts.attack * (target.pct / 100));
+      const vulnerabilities = extractVulnerabilities(target);
+      
+      for (let i = 0; i < targetAttackCount; i++) {
+        const vuln = vulnerabilities[i % vulnerabilities.length] || { type: 'premise_negation', target: target.label };
+        const angleIdx = totalAngles + attackAgents.length;
+        const p = buildAttackPrompt(target.label, target.pct.toFixed(1), vuln, angleIdx);
+        attackAgents.push({ config: p, target: target.label, vulnerability: vuln });
+      }
+
+    }
+    
+    const attackTasks = attackAgents.map((a, i) => cc.execute(async () => {
+      if (STATE.paused) {
+        await waitForResume();
+        if (STATE._cancelled) return null;
+      }
+      const r = await callAgentWithRetry(`atk_${i}`, a.config.system, a.config.user, 2000);
+      if (r) { r._target = a.target; r._vulnerability = a.vulnerability; }
+      return r;
+    }));
+    
+    const rawAttacks = await Promise.all(attackTasks);
+    attackResults = rawAttacks.filter(r => r !== null);
+    logger.attack('all', attackResults.length, attackAgents.length);
+  }
+  
+  // Store results
+  STATE.clusters = clusters;
+  STATE.forkInfo = forkInfo;
+  STATE._attackResults = attackResults;
+  
+  // Render
+  renderResults(clusters, forkInfo, attackResults, counts);
+  
+  // Save final snapshot
+  await saveProgressSnapshot(totalAngles, totalAngles);
+
+  // Save completed session
+  const sessionRecord = {
+    id: STATE.sessionId,
+    situation: document.getElementById('situationInput').value.trim(),
+    constraints: hardConstraints.slice(),
+    level: STATE.currentLevel,
+    timestamp: Date.now(),
+    clusters: clusters.map(c => ({
+      label: c.label,
+      size: c.size,
+      pct: c.pct,
+      angleDiversity: c.angleDiversity,
+      structureIntegrity: c.structureIntegrity,
+      agents: (c.agents || []).map(a => ({
+        agentId: a.agentId,
+        angle: a.angle,
+        conclusion: a.conclusion,
+        reasoning_chain: a.reasoning_chain,
+        key_assumptions: a.key_assumptions,
+        overall_certainty: a.overall_certainty,
+        unknowns: a.unknowns
+      }))
+    })),
+    forkInfo: forkInfo,
+    attackResults: attackResults ? attackResults.map(a => ({
+      _target: a._target,
+      _vulnerability: a._vulnerability,
+      impact: a.impact,
+      target: a.target,
+      plausibility: a.plausibility
+    })) : null,
+    counts: {
+      reasoning: counts.reasoning,
+      attack: counts.attack,
+      totalAgents: counts.totalAgents,
+      totalTok: counts.totalTok
+    }
+  };
+  if (DB._db) await DB.saveSession(sessionRecord);
+
+  clearInterval(autoSnapshotInterval);
+  STATE.running = false;
+  STATE.paused = false;
+  updateRunButton();
+  setStatus(`完成：发现 ${clusters.length} 个簇。`);
+}
+
+
+async function threeStepConfirm(level) {
+  const counts = computeAgentCounts(level);
+  
+  // Step 1
+  let result = await showConfirmModal(`
+    <h2>确认运行 - 第1/3步</h2>
+    <div style="color:var(--text-secondary);font-size:13px;line-height:1.8;">
+      <div>等级：<strong style="color:var(--text);">L${level}</strong></div>
+      <div>推理Agent：<strong style="color:var(--text);">${counts.reasoning.toLocaleString()}</strong></div>
+      <div>对抗Agent：<strong style="color:var(--text);">${counts.attack.toLocaleString()}</strong></div>
+      <div>总Agent：<strong style="color:var(--text);">${counts.totalAgents.toLocaleString()}</strong></div>
+      <div>预估Token：<strong style="color:var(--text);">${formatTokens(counts.totalTok)}</strong></div>
+      <div>思考强度：<strong style="color:var(--text);">${STATE.settings.reasoningEffort}</strong></div>
+    </div>
+    <div class="modal-actions">
+      <button data-cancel>取消</button>
+      <button id="confirmNext1" class="btn-primary" style="width:auto;">下一步</button>
+    </div>
+  `, 'confirmNext1');
+  if (!result) return false;
+  
+  // Step 2
+  const coverage = counts.coverage;
+  result = await showConfirmModal(`
+    <h2>确认运行 - 第2/3步</h2>
+    <div style="color:var(--text-secondary);font-size:13px;line-height:1.8;">
+      <div>角度覆盖率：<strong style="color:var(--text);">${coverage}%</strong></div>
+      <div>硬约束数量：<strong style="color:var(--text);">${hardConstraints.length}</strong> 已确认</div>
+      <div>约束探测：<strong style="color:${STATE.probeDone && STATE.probeConvergence >= 40 ? 'var(--pass)' : 'var(--warn)'};">${STATE.probeDone ? STATE.probeConvergence.toFixed(0) + '%' : '未运行'}</strong></div>
+    </div>
+    <div class="modal-actions">
+      <button data-cancel>取消</button>
+      <button id="confirmNext2" class="btn-primary" style="width:auto;">下一步</button>
+    </div>
+  `, 'confirmNext2');
+  if (!result) return false;
+  
+  // Step 3
+  result = await showConfirmModal(`
+    <h2>确认运行 - 第3/3步</h2>
+    <div style="color:var(--warn);font-size:13px;line-height:1.8;">
+      <div>此等级将消耗大量API资源。</div>
+      <div style="margin-top:8px;">适用于：</div>
+      <div>- 高风险不可逆决策</div>
+      <div>- 前置等级已充分探索后</div>
+      <div>- 需要统计确定性时</div>
+    </div>
+    <div class="modal-actions">
+      <button data-cancel>取消</button>
+      <button id="confirmRun" class="btn-primary" style="width:auto;background:var(--danger);">确认运行</button>
+    </div>
+  `, 'confirmRun');
+  return result;
+}
+
+async function l9ExtraConfirm() {
+  const total = getCombinationCount();
+  const counts = computeAgentCounts(9);
+  
+  if (total <= 50000) return true; // Small enough, no extra confirm
+  
+  return await showConfirmModal(`
+    <h2>L9 完全穷举警告</h2>
+    <div style="color:var(--warn);font-size:13px;line-height:1.8;">
+      <div>当前维度组合将生成 <strong style="color:var(--danger);">${total.toLocaleString()}</strong> 个Agent。</div>
+      <div>预估Token：<strong style="color:var(--danger);">${formatTokens(counts.totalTok)}</strong></div>
+      <div style="margin-top:12px;">此操作不可撤销，可能消耗大量API配额。</div>
+      <div style="margin-top:8px;">建议：</div>
+      <div>- 减少维度选择以降低Agent数量</div>
+      <div>- 先用L7（上限5万）探索</div>
+      <div style="margin-top:16px;">输入 "confirm exhaustion" 继续：</div>
+      <input type="text" id="l9ConfirmInput" placeholder="confirm exhaustion" style="width:100%;margin-top:4px;">
+    </div>
+    <div class="modal-actions">
+      <button data-cancel>取消</button>
+      <button id="l9ConfirmBtn" class="btn-primary" style="width:auto;background:var(--danger);opacity:0.5;" disabled>确认</button>
+    </div>
+  `, 'l9ConfirmBtn', () => {
+    const inp = document.getElementById('l9ConfirmInput');
+    const btn = document.getElementById('l9ConfirmBtn');
+    if (inp && btn) {
+      inp.addEventListener('input', () => {
+        btn.disabled = inp.value.trim() !== 'confirm exhaustion';
+        btn.style.opacity = btn.disabled ? '0.5' : '1';
+      });
+    }
+  });
+}
+
+function showConfirmModal(html, triggerId, setupFn) {
+  return new Promise((resolve) => {
+    const modal = document.getElementById('confirmModal');
+    const content = document.getElementById('confirmContent');
+    content.innerHTML = html;
+    modal.classList.remove('hidden');
+    
+    if (setupFn) setupFn();
+    
+    let settled = false;
+    
+    function cleanup() {
+      modal.classList.add('hidden');
+      modal.removeEventListener('click', onModalClick);
+      content.innerHTML = '';
+    }
+    
+    function onModalClick(e) {
+      if (settled) return;
+      
+      // 确认按钮点击
+      if (e.target.id === triggerId || e.target.closest(`#${triggerId}`)) {
+        settled = true;
+        cleanup();
+        resolve(true);
+        return;
+      }
+      
+      // 取消：点击遮罩 或 点击含 data-cancel 属性的按钮
+      if (e.target === modal || e.target.closest('[data-cancel]')) {
+        settled = true;
+        cleanup();
+        resolve(false);
+        return;
+      }
+    }
+    
+    modal.addEventListener('click', onModalClick);
+  });
+}
+
+function closeConfirmModal() {
+  document.getElementById('confirmModal').classList.add('hidden');
+}
+
+// ─── ATTACK HELPERS ──────────────────────────────────────────
+function extractVulnerabilities(cluster) {
+  const vulns = [];
+  const allAssumptions = cluster.agents.flatMap(a => a.key_assumptions || []);
+  const freqMap = {};
+  for (const a of allAssumptions) { freqMap[a] = (freqMap[a] || 0) + 1; }
+  for (const [text, count] of Object.entries(freqMap)) {
+    vulns.push({ type: 'premise_negation', target: text, affectedPct: count / cluster.agents.length });
+  }
+  const allUnknowns = cluster.agents.flatMap(a => a.unknowns || []);
+  const unkFreq = {};
+  for (const u of allUnknowns) { unkFreq[u] = (unkFreq[u] || 0) + 1; }
+  for (const [text, count] of Object.entries(unkFreq)) {
+    vulns.push({ type: 'external_shock', target: text, affectedPct: count / cluster.agents.length });
+  }
+  vulns.sort((a, b) => b.affectedPct - a.affectedPct);
+  return vulns.length > 0 ? vulns : [{ type: 'premise_negation', target: cluster.label, affectedPct: 1 }];
+}
+
+// ─── RENDER RESULTS ───────────────────────────────────────────
+function renderResults(clusters, forkInfo, attackResults, counts) {
+  document.getElementById('resultEmpty').classList.add('hidden');
+  document.getElementById('resultContent').classList.remove('hidden');
+  
+  // Heatmap
+  renderHeatmap(clusters);
+
+  // Summary
+  const summary = document.getElementById('resultSummary');
+  summary.textContent = `L${STATE.currentLevel} | ${counts.reasoning} 推理 + ${counts.attack} 对抗 | ~${formatTokens(counts.totalTok)} tok | ${clusters.length} 簇`;
+  
+  // Clusters
+  const container = document.getElementById('clustersContainer');
+  const colors = ['var(--branch-a)', 'var(--branch-b)', 'var(--branch-c)', 'var(--text-secondary)'];
+  
+  container.innerHTML = clusters.map((c, i) => {
+    const attackSurvival = attackResults 
+      ? computeAttackSurvival(c.label, attackResults)
+      : null;
+    
+    const premiseList = extractPremiseList(c);
+    
+    return `
+    <div class="result-cluster">
+      <div class="cluster-header">
+        <span class="cluster-label" style="color:${colors[i] || colors[3]}">${escHtml(c.label)}</span>
+        <span class="cluster-pct">${c.pct.toFixed(1)}% (${c.size})</span>
+      </div>
+      <div class="cluster-bar">
+        <div class="cluster-bar-fill" style="width:${c.pct}%;background:${colors[i] || colors[3]};"></div>
+      </div>
+      <div class="cluster-detail">
+        <span>多样性 ${(c.angleDiversity * 100).toFixed(0)}%</span>
+        <span>完整性 ${(c.structureIntegrity * 100).toFixed(0)}%</span>
+        ${attackSurvival !== null ? `<span>攻击存活 ${attackSurvival.toFixed(0)}%</span>` : '<span style=\"color:var(--text-weak);\">升级L4+启动攻击</span>'}
+      </div>
+      ${(() => {
+        if (!attackResults) return '';
+        const detail = computeAttackDetail(c.label, attackResults);
+        if (!detail) return '';
+        return `
+        <div style="margin-top:6px;background:rgba(255,68,68,0.05);border:1px solid rgba(255,68,68,0.2);border-radius:var(--radius);padding:8px;">
+          <div style="font-size:10px;color:var(--warn);margin-bottom:4px;">攻击面分析 (${detail.total}次攻击)</div>
+          ${detail.vulnerabilities.slice(0, 3).map(v => `
+            <div style="font-size:10px;padding:2px 0;display:flex;justify-content:space-between;">
+              <span style="color:var(--text-secondary);">${escHtml(v.target).substring(0, 40)}</span>
+              <span style="color:var(--text-weak);">逆转率 ${(v.reversalRate*100).toFixed(0)}% | 可信度 ${(v.avgPlausibility*100).toFixed(0)}%</span>
+            </div>
+          `).join('')}
+        </div>`;
+      })()}
+      <div style="margin-top:6px;">
+        <button class="trace-toggle-btn" data-cluster="${escHtml(c.label)}" style="font-size:10px;padding:2px 8px;background:transparent;border:1px solid var(--border);color:var(--text-weak);border-radius:2px;cursor:pointer;">展开推理追溯</button>
+        <div class="trace-content" style="display:none;margin-top:6px;max-height:200px;overflow-y:auto;font-size:10px;font-family:var(--font-mono);color:var(--text-secondary);"></div>
+      </div>
+      ${premiseList.length > 0 ? `
+        <div style="margin-top:6px;font-size:10px;color:var(--text-weak);">
+          关键前提：${premiseList.slice(0,3).map(p => escHtml(p.text)).join(' | ')}
+        </div>
+      ` : ''}
+    </div>`;
+  }).join('');
+  
+  // Fork display
+  const forkContainer = document.getElementById('forkContainer');
+  if (forkInfo && clusters.length >= 2) {
+    forkContainer.innerHTML = `
+    <div class="fork-display">
+      <div style="font-weight:600;margin-bottom:8px;color:var(--text);">分叉追溯</div>
+      <div>主要分叉在 <span class="fork-step">第${forkInfo.forkStep}步</span>（相似度：${(forkInfo.similarity * 100).toFixed(0)}%）</div>
+      <div style="margin-top:4px;">
+        ${forkInfo.contributions.map(c => `
+          <span class="fork-dim">${c.dim}：${escHtml(c.biasA)} vs ${escHtml(c.biasB)}（${c.divergence.toFixed(2)}）</span>
+        `).join('')}
+      </div>
+    </div>`;
+  } else {
+    forkContainer.innerHTML = '';
+  }
+  
+  // Premise list (top cluster)
+  const premiseContainer = document.getElementById('premiseContainer');
+  if (clusters.length > 0) {
+    const topPremises = extractPremiseList(clusters[0]);
+    if (topPremises.length > 0) {
+      premiseContainer.innerHTML = `
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:8px;">
+        <div style="font-weight:600;margin-bottom:8px;color:var(--text);">待确认前提</div>
+        ${topPremises.slice(0, 5).map((p, i) => `
+          <div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px;">
+            <input type="checkbox" class="premise-check" data-premise="${escHtml(p.text)}" style="accent-color:var(--text);flex-shrink:0;">
+            <span style="flex:1;">${escHtml(p.text)}</span>
+            <span style="color:var(--text-weak);font-size:10px;flex-shrink:0;">影响 ${p.count} Agent</span>
+          </div>
+        `).join('')}
+        <button id="confirmPremisesBtn" style="margin-top:8px;width:100%;padding:6px;background:var(--text);color:var(--bg);border:none;border-radius:var(--radius);font-size:11px;font-weight:600;cursor:pointer;">确认选中前提并重跑受影响Agent</button>
+      </div>`;
+    } else {
+      premiseContainer.innerHTML = '';
+    }
+  }
+
+  // Runtime unknown aggregation
+  if (STATE._runtimeUnknowns && Object.keys(STATE._runtimeUnknowns).length > 0) {
+    const sorted = Object.entries(STATE._runtimeUnknowns).sort((a,b) => b[1] - a[1]).slice(0, 10);
+    const unknownHtml = sorted.map(([k, v], i) => `
+      <div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px;">
+        <span style="color:var(--text-weak);">${i+1}.</span>
+        <span style="flex:1;color:var(--warn);">${escHtml(k)}</span>
+        <span style="color:var(--text-weak);font-size:10px;">${v} Agent</span>
+      </div>
+    `).join('');
+    
+    const unknownDiv = document.createElement('div');
+    unknownDiv.style.cssText = 'background:var(--bg);border:1px solid rgba(255,136,68,0.3);border-radius:var(--radius);padding:12px;margin-bottom:8px;';
+    unknownDiv.innerHTML = `
+      <div style="font-weight:600;margin-bottom:8px;color:var(--warn);">运行中发现的高频未知项</div>
+      ${unknownHtml}
+      <div style="font-size:10px;color:var(--text-weak);margin-top:4px;">补充这些信息后重跑可提高收敛率</div>
+    `;
+    
+    const premiseContainer = document.getElementById('premiseContainer');
+    premiseContainer.appendChild(unknownDiv);
+  }
+  
+  // Upgrade button
+  const upgradeBtn = document.getElementById('upgradeBtn');
+  if (STATE.currentLevel < 9) {
+    upgradeBtn.textContent = `升级到 L${STATE.currentLevel + 1}`;
+    upgradeBtn.classList.remove('hidden');
+  } else {
+    upgradeBtn.classList.add('hidden');
+  }
+  
+  // Show debug if enabled
+  if (STATE.debugVisible) {
+    document.getElementById('debugPanel').classList.remove('hidden');
+  }
+
+  // Trace chain toggle buttons
+  document.querySelectorAll('.trace-toggle-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const content = btn.nextElementSibling;
+      const isOpen = content.style.display !== 'none';
+      
+      if (isOpen) {
+        content.style.display = 'none';
+        btn.textContent = '展开推理追溯';
+      } else {
+        const clusterLabel = btn.dataset.cluster;
+        const cluster = clusters.find(c => c.label === clusterLabel);
+        if (!cluster) return;
+        
+        // Show trace: sample up to 10 agents from this cluster
+        const sample = cluster.agents.slice(0, 10);
+        content.innerHTML = sample.map((a, si) => {
+          const chain = a.reasoning_chain || [];
+          const steps = chain.map(s => 
+            `<div style="padding:1px 0;color:var(--text-weak);">Step${s.step}: ${escHtml(s.premise || '').substring(0, 80)}</div>`
+          ).join('');
+          return `<div style="padding:4px 0;border-bottom:1px solid #111;">
+            <div style="color:var(--text);">Agent #<span style="color:var(--branch-a);cursor:pointer;text-decoration:underline;" onclick="viewAgentDetail(${a.agentId})">${a.agentId}</span> (certainty: ${(a.overall_certainty||0).toFixed(2)})</div>
+            ${steps}
+            <div style="color:var(--pass);">-> ${escHtml(a.conclusion?.action || '?')}</div>
+          </div>`;
+        }).join('');
+        
+        if (cluster.agents.length > 10) {
+          content.innerHTML += `<div style="color:#555;padding:4px 0;">... 还有 ${cluster.agents.length - 10} 个Agent</div>`;
+        }
+        
+        content.style.display = 'block';
+        btn.textContent = '收起推理追溯';
+      }
+    });
+  });
+  // 绑定前提确认按钮
+  const confirmBtn = document.getElementById('confirmPremisesBtn');
+  if (confirmBtn) {
+    confirmBtn.addEventListener('click', async () => {
+      const checked = document.querySelectorAll('.premise-check:checked');
+      if (checked.length === 0) return;
+      const confirmedPremises = [...checked].map(cb => cb.dataset.premise);
+      
+      // 收集需要重跑的Agent
+      const agentsToRerun = [];
+      for (const cluster of STATE.clusters) {
+        for (const agent of cluster.agents) {
+          const agentAssumptions = agent.key_assumptions || [];
+          if (agentAssumptions.some(a => confirmedPremises.includes(a))) {
+            agentsToRerun.push(agent);
+          }
+        }
+      }
+      
+      if (agentsToRerun.length === 0) {
+        alert('没有Agent依赖这些前提。无需重跑。');
+        return;
+      }
+      
+      const proceed = await showConfirmModal(`
+        <h2>确认重跑</h2>
+        <div style="color:var(--text-secondary);font-size:13px;line-height:1.8;">
+          <div>${confirmedPremises.length} 个前提被确认。</div>
+          <div>${agentsToRerun.length} 个Agent受这些前提影响，将被重跑。</div>
+          <div style="margin-top:8px;">确认的前提将被添加为硬约束。</div>
+        </div>
+        <div class="modal-actions">
+          <button data-cancel>取消</button>
+          <button id="confirmRerunBtn" class="btn-primary" style="width:auto;">确认重跑</button>
+        </div>
+      `, 'confirmRerunBtn');
+      
+      if (!proceed) return;
+      
+      // 添加为硬约束
+      for (const p of confirmedPremises) {
+        addConstraint(p, '=', '是', '');
+      }
+      
+      // 重跑受影响Agent
+      setStatus(`重跑 ${agentsToRerun.length} 个Agent...`);
+      const cc = new AdaptiveConcurrency(STATE.settings.concurrencyLimit);
+      const rerunTasks = agentsToRerun.map((agent) => cc.execute(async () => {
+        const p = buildAgentPrompt(agent.angle, agent.agentId);
+        const r = await callAgentWithRetry(agent.agentId, p.system, p.user, 3000);
+        if (r) { r.angle = agent.angle; r.agentId = agent.agentId; }
+        return r;
+      }));
+      
+      const rerunResults = await Promise.all(rerunTasks);
+      
+      // 合并结果：保留未重跑的Agent，替换重跑的Agent
+      const mergedResults = [];
+      const rerunIds = new Set(agentsToRerun.map(a => a.agentId));
+      for (const cluster of STATE.clusters) {
+        for (const agent of cluster.agents) {
+          if (!rerunIds.has(agent.agentId)) {
+            mergedResults.push(agent);
+          }
+        }
+      }
+      for (const r of rerunResults) {
+        if (r !== null) mergedResults.push(r);
+      }
+      
+      // 重新聚类
+      const newClusters = clusterByConclusion(mergedResults);
+      const newForkInfo = detectFork(newClusters);
+      
+      // 更新状态并渲染
+      STATE.clusters = newClusters;
+      STATE.forkInfo = newForkInfo;
+      const counts = computeAgentCounts(STATE.currentLevel);
+      renderResults(newClusters, newForkInfo, STATE._attackResults, counts);
+      setStatus(`重跑完成：${mergedResults.length} 个Agent，${newClusters.length} 个簇。`);
+      logger.sys(`Premises confirmed, reran ${agentsToRerun.length} agents`);
+    });
+  }
+}
+
+function renderHeatmap(clusters) {
+  const canvas = document.getElementById('heatmapCanvas');
+  if (!canvas || clusters.length === 0) return;
+  
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width;
+  const H = canvas.height;
+  
+  // Clear
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(0, 0, W, H);
+  
+  // Generate 2D positions for each agent using PCA-like projection
+  const allAgents = [];
+  const allDims = new Set();
+  for (const c of clusters) {
+    for (const a of c.agents) {
+      allAgents.push(a);
+      if (a.angle) Object.keys(a.angle).forEach(k => allDims.add(k));
+    }
+  }
+  
+  if (allAgents.length === 0) return;
+  
+  // Simple projection: use first 2 dimensions or random fallback
+  const dimKeys = [...allDims].slice(0, 4);
+  const positions = allAgents.map(a => {
+    let x = 0, y = 0;
+    // Hash angle values to pseudo-positions
+    if (a.angle) {
+      const vals = dimKeys.map(k => {
+        const v = a.angle[k] || '';
+        let hash = 0;
+        for (let i = 0; i < v.length; i++) hash = ((hash << 5) - hash + v.charCodeAt(i)) | 0;
+        return (hash % 1000) / 1000;
+      });
+      x = vals[0] || 0.5;
+      y = vals[1] || 0.5;
+      if (vals.length >= 4) {
+        x = (vals[0] + vals[2]) / 2;
+        y = (vals[1] + vals[3]) / 2;
+      }
+    } else {
+      x = Math.random();
+      y = Math.random();
+    }
+    return { x, y, cluster: clusters.find(c => c.agents.includes(a)) };
+  });
+  
+  const colors = ['#4488ff', '#ff8844', '#aa66ff', '#999999', '#666666', '#ff4444', '#44ff44', '#ffffff'];
+  const padding = 30;
+  const plotW = W - padding * 2;
+  const plotH = H - padding * 2;
+  
+  // Draw points
+  for (const pos of positions) {
+    const ci = clusters.indexOf(pos.cluster);
+    const cx = padding + (pos.x * 0.8 + 0.1) * plotW;
+    const cy = padding + (pos.y * 0.8 + 0.1) * plotH;
+    ctx.fillStyle = colors[ci % colors.length];
+    ctx.globalAlpha = 0.6;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  
+  // Legend
+  const legendY = H - 14;
+  let legendX = padding;
+  ctx.font = '10px sans-serif';
+  for (let i = 0; i < Math.min(clusters.length, 5); i++) {
+    ctx.fillStyle = colors[i % colors.length];
+    ctx.fillRect(legendX, legendY, 10, 10);
+    ctx.fillStyle = '#999999';
+    ctx.fillText(`${clusters[i].label} (${clusters[i].pct.toFixed(0)}%)`, legendX + 14, legendY + 9);
+    legendX += 120;
+  }
+}
+
+function computeAttackSurvival(label, attackResults) {
+  const relevant = attackResults.filter(a => a._target === label);
+  if (relevant.length === 0) return null;
+  const survived = relevant.filter(a => !a.impact?.conclusion_reversal).length;
+  return (survived / relevant.length) * 100;
+}
+
+function computeAttackDetail(label, attackResults) {
+  const relevant = attackResults.filter(a => a._target === label);
+  if (relevant.length === 0) return null;
+  
+  // Group by target
+  const byTarget = {};
+  for (const a of relevant) {
+    const t = a.target || a._vulnerability?.target || 'unknown';
+    if (!byTarget[t]) byTarget[t] = [];
+    byTarget[t].push(a);
+  }
+  
+  const vulnerabilities = Object.entries(byTarget).map(([target, attacks]) => {
+    const reversalRate = attacks.filter(a => a.impact?.conclusion_reversal).length / attacks.length;
+    const avgPlausibility = attacks.reduce((s, a) => s + (a.plausibility || 0), 0) / attacks.length;
+    return { target, count: attacks.length, reversalRate, avgPlausibility };
+  });
+  
+  vulnerabilities.sort((a, b) => (b.reversalRate * b.avgPlausibility) - (a.reversalRate * a.avgPlausibility));
+  
+  return { total: relevant.length, vulnerabilities };
+}
+
+function escHtml(s) {
+  if (!s) return '';
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+
+async function viewAgentDetail(agentId) {
+  // ── 路径1：从内存 clusters 中查找（覆盖新鲜运行 + 历史会话） ──
+  let agent = null;
+  for (const c of (STATE.clusters || [])) {
+    const found = (c.agents || []).find(a => a.agentId === agentId);
+    if (found) { agent = found; break; }
+  }
+
+  // ── 路径2：DB 兜底（旧数据、攻击Agent等不在 clusters 中的情况） ──
+  if (!agent && DB._db && STATE.sessionId) {
+    const fullId = `${STATE.sessionId}_${agentId}`;
+    const tx = DB._db.transaction('agentResults', 'readonly');
+    const store = tx.objectStore('agentResults');
+    const record = await new Promise((resolve) => {
+      const req = store.get(fullId);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => resolve(null);
+    });
+    if (record) {
+      // 将 DB 格式映射为内存格式
+      agent = {
+        agentId: agentId,
+        angle: record.angle,
+        conclusion: record.conclusion,
+        reasoning_chain: record.reasoningChain,
+        key_assumptions: record.keyAssumptions,
+        unknowns: record.unknowns,
+        overall_certainty: record.overallCertainty
+      };
+    }
+  }
+
+  if (!agent) {
+    alert('Agent #' + agentId + ' 数据未找到。');
+    return;
+  }
+
+  const chain = agent.reasoning_chain || [];
+  const steps = chain.map((s, i) => `
+    <div style="padding:6px 0;border-bottom:1px solid #111;">
+      <div style="color:var(--text-weak);font-size:10px;">Step ${s.step} | ${s.premise_type || '?'} | confidence: ${(s.confidence || 0).toFixed(2)}</div>
+      <div style="color:var(--text-secondary);font-size:11px;margin-top:2px;">前提: ${escHtml((s.premise || '').substring(0, 100))}</div>
+      <div style="color:var(--text-secondary);font-size:11px;">操作: ${escHtml((s.operation || '').substring(0, 100))}</div>
+      <div style="color:var(--text);font-size:11px;">结论: ${escHtml((s.result || '').substring(0, 100))}</div>
+    </div>
+  `).join('');
+
+  const angleStr = agent.angle ? Object.entries(agent.angle).map(([k,v]) => `${k}: ${v}`).join(', ') : 'N/A';
+
+  await showConfirmModal(`
+    <h2>Agent #${agentId} 推理详情</h2>
+    <div style="font-size:10px;color:var(--text-weak);margin-bottom:8px;">角度: ${escHtml(angleStr)}</div>
+    <div style="font-size:10px;color:var(--bookmark);margin-bottom:8px;">结论: ${escHtml(agent.conclusion?.action || '?')} — ${escHtml((agent.conclusion?.detail || '').substring(0, 80))}</div>
+    <div style="font-size:10px;color:var(--text-weak);margin-bottom:8px;">整体置信度: ${(agent.overall_certainty || 0).toFixed(2)}</div>
+    <div style="max-height:300px;overflow-y:auto;margin-bottom:8px;">${steps || '<div style="color:var(--text-weak);">无推理链数据</div>'}</div>
+    <div style="font-size:10px;color:var(--text-weak);">假设: ${(agent.key_assumptions || []).join('; ') || '无'}</div>
+    <div style="font-size:10px;color:var(--text-weak);">未知: ${(agent.unknowns || []).join('; ') || '无'}</div>
+    <div class="modal-actions">
+      <button data-cancel>关闭</button>
+    </div>
+  `, '__none__');
+}
+
+function formatTokens(n) {
+  if (n >= 1e9) return (n/1e9).toFixed(1) + 'B';
+  if (n >= 1e6) return (n/1e6).toFixed(1) + 'M';
+  if (n >= 1e3) return (n/1e3).toFixed(1) + 'K';
+  return n.toString();
+}
+
+// ─── PROGRESS & STATUS ────────────────────────────────────────
+function updateProgress(completed, total) {
+  const pct = total > 0 ? (completed / total * 100) : 0;
+  document.getElementById('statusStats').textContent = `${completed}/${total} (${pct.toFixed(0)}%)`;
+}
+
+function setStatus(msg) {
+  document.getElementById('statusText').textContent = msg;
+}
+
+// ─── SNAPSHOT ─────────────────────────────────────────────────
+async function saveProgressSnapshot(completed, total) {
+  if (!DB._db) return;
+  const snapshot = {
+    id: STATE.sessionId,
+    sessionId: STATE.sessionId,
+    completed,
+    total,
+    level: STATE.currentLevel,
+    timestamp: Date.now(),
+    status: STATE.paused ? 'paused' : 'running'
+  };
+  try {
+    await DB.saveSnapshot(snapshot);
+    logger.snapshot(completed, total);
+  } catch (e) {
+    // Silent fail on snapshot
+  }
+}
+
+// ─── INTERRUPT / RESUME ───────────────────────────────────────
+function toggleInterrupt() {
+  if (!STATE.running) return;
+  
+  if (!STATE.paused) {
+    // Interrupt
+    STATE.paused = true;
+    setStatus('已中断');
+    updateRunButton();
+    logger._add('SYS', 'WARN', `Interrupted at ${STATE.completedAgents}/${STATE.totalAgents}`, {});
+    saveProgressSnapshot(STATE.completedAgents, STATE.totalAgents);
+  } else {
+    // Resume
+    STATE.paused = false;
+    setStatus('继续中...');
+    updateRunButton();
+    logger._add('SYS', 'INFO', `Resumed from ${STATE.completedAgents}/${STATE.totalAgents}`, {});
+  }
+}
+
+
+function updateRunButton() {
+  const runBtn = document.getElementById('runBtn');
+  const interruptBtn = document.getElementById('interruptBtn');
+  const probeBtn = document.getElementById('probeBtn');
+  
+  if (STATE.running && !STATE.paused) {
+    runBtn.classList.add('hidden');
+    interruptBtn.classList.remove('hidden');
+    interruptBtn.className = 'btn-primary btn-interrupt';
+    interruptBtn.textContent = '中断';
+    probeBtn.disabled = true;
+  } else if (STATE.running && STATE.paused) {
+    runBtn.classList.add('hidden');
+    interruptBtn.classList.remove('hidden');
+    interruptBtn.className = 'btn-primary btn-resume';
+    interruptBtn.textContent = '继续';
+    probeBtn.disabled = true;
+  } else {
+    runBtn.classList.remove('hidden');
+    runBtn.className = 'btn-primary';
+    runBtn.textContent = '运行';
+    interruptBtn.classList.add('hidden');
+    probeBtn.disabled = false;
+  }
+}
+
+// ─── DIMENSION RENDERING ──────────────────────────────────────
+// 折叠状态持久化（放在 renderDimensions 上方、toggleDimGroup 之前，行 2356≈）
+const _openGroups = new Map(); // groupKey → true/open | false/closed | undefined/untouched
+
+function renderDimensions() {
+  const container = document.getElementById('dimensionsContainer');
+  let html = '';
+
+  // Core dimensions
+  const isMobile = window.innerWidth <= 1279;
+  const defaultOpen = !isMobile;
+  const coreKey = 'core';
+  const coreOpen = _openGroups.has(coreKey) ? true : (_openGroups.has(coreKey) ? false : defaultOpen);
+  const coreOpenClass = coreOpen ? ' open' : '';
+  html += `<div class="dim-group"><div class="dim-group-header" onclick="toggleDimGroup(this,'${coreKey}')"><span class="arrow${coreOpenClass}">></span> 核心维度 (5)</div><div class="dim-group-body${coreOpenClass}">`;
+  for (const [key, dim] of Object.entries(dimensionState)) {
+    html += renderDimTags(key, dim);
+  }
+  html += '</div></div>';
+
+  // Domain dimensions
+  const dd = getDomainDims();
+  const ddKeys = Object.keys(dd);
+  if (ddKeys.length > 0) {
+    const domainKey = 'domain';
+    const domainOpen = _openGroups.has(domainKey) ? _openGroups.get(domainKey) : defaultOpen;
+    const domainOpenClass = domainOpen ? ' open' : '';
+    html += `<div class="dim-group"><div class="dim-group-header" onclick="toggleDimGroup(this,'${domainKey}')"><span class="arrow${domainOpenClass}">></span> 领域维度：${DOMAIN_DEFS[activeDomain]?.name || activeDomain} (${ddKeys.length}项)</div><div class="dim-group-body${domainOpenClass}">`;
+    for (const [key, dim] of Object.entries(dd)) {
+      const dimWithSel = { ...dim, selected: dim.selected || dim.values.map((_, i) => i), _isDomain: true, _key: key };
+      html += renderDimTags(key, dimWithSel);
+    }
+    html += '</div></div>';
+  }
+
+
+  // Custom dimensions
+  if (customDimensions.length > 0) {
+    const customKey = 'custom';
+    const customOpen = _openGroups.has(customKey) ? _openGroups.get(customKey) : defaultOpen;
+    const customOpenClass = customOpen ? ' open' : '';
+    html += `<div class="dim-group"><div class="dim-group-header" onclick="toggleDimGroup(this,'${customKey}')"><span class="arrow${customOpenClass}">></span> 自定义维度 (` + customDimensions.length + `)</div><div class="dim-group-body${customOpenClass}">`;
+    for (const cd of customDimensions) {
+      const dimWithSel = { label: cd.name, values: cd.values, selected: cd.selected || cd.values.map((_, i) => i), _isCustom: true, _name: cd.name };
+      html += renderDimTags(cd.name, dimWithSel);
+    }
+    html += '</div></div>';
+  }
+
+  container.innerHTML = html;
+}
+
+function renderDimTags(key, dim) {
+  const tags = dim.values.map((v, i) => {
+    const sel = dim.selected.includes(i);
+    const dataKey = dim._isDomain ? `data-domain-key="${dim._key}"` : dim._isCustom ? `data-custom-key="${dim._name}"` : `data-core-key="${key}"`;
+    return `<span class="dim-tag ${sel ? 'selected' : ''}" data-index="${i}" data-key="${key}" ${dataKey} onclick="toggleDimTag(this)">${v}</span>`;
+  }).join('');
+  return `<div style="margin-bottom:6px;">
+    <div style="font-size:10px;color:var(--text-weak);margin-bottom:3px;">${dim.label || key} (${dim.selected.length}/${dim.values.length})</div>
+    <div class="dim-tags">${tags}</div>
+  </div>`;
+}
+
+function toggleDimGroup(header, groupKey) {
+  const arrow = header.querySelector('.arrow');
+  const body = header.nextElementSibling;
+  const open = body.classList.contains('open');
+  if (open) {
+    body.classList.remove('open'); arrow.classList.remove('open');
+    _openGroups.set(groupKey, false);
+  } else {
+    body.classList.add('open'); arrow.classList.add('open');
+    _openGroups.set(groupKey, true);
+  }
+}
+
+function toggleDimTag(tag) {
+  const index = parseInt(tag.dataset.index);
+  const coreKey = tag.dataset.coreKey;
+  const domainKey = tag.dataset.domainKey;
+  const customKey = tag.dataset.customKey;
+  
+  if (coreKey && dimensionState[coreKey]) {
+    const dim = dimensionState[coreKey];
+    const pos = dim.selected.indexOf(index);
+    if (pos >= 0) dim.selected.splice(pos, 1); else dim.selected.push(index);
+    dim.selected.sort((a,b) => a-b);
+  } else if (domainKey) {
+    // 直接操作源数据，不经过深拷贝
+    if (!DOMAIN_DEFS[activeDomain].dims[domainKey].selected) {
+      DOMAIN_DEFS[activeDomain].dims[domainKey].selected = DOMAIN_DEFS[activeDomain].dims[domainKey].values.map((_, i) => i);
+    }
+    const sel = DOMAIN_DEFS[activeDomain].dims[domainKey].selected;
+    const pos = sel.indexOf(index);
+    if (pos >= 0) sel.splice(pos, 1); else sel.push(index);
+    sel.sort((a,b) => a-b);
+  } else if (customKey) {
+    const cd = customDimensions.find(c => c.name === customKey);
+    if (cd) {
+      const pos = cd.selected.indexOf(index);
+      if (pos >= 0) cd.selected.splice(pos, 1); else cd.selected.push(index);
+      cd.selected.sort((a,b) => a-b);
+    }
+  }
+  
+  renderDimensions();
+  updateLevelInfo();
+}
+
+function addCustomDimension() {
+  const name = prompt('维度名称（如"饮食偏好"）：');
+  if (!name) return;
+  const valuesStr = prompt('取值（逗号分隔，如"肉食,素食,辣,清淡"）：');
+  if (!valuesStr) return;
+  const values = valuesStr.split(/[,，、]/).map(s => s.trim()).filter(Boolean);
+  if (values.length < 2) { alert('至少需要2个取值。'); return; }
+  
+  customDimensions.push({ name, values, selected: values.map((_, i) => i) });
+  renderDimensions();
+  updateLevelInfo();
+  logger.sys(`添加自定义维度：${name} (${values.length}项)`);
+}
+
+document.getElementById('addCustomDimBtn').addEventListener('click', addCustomDimension);
+
+document.getElementById('domainSelect').addEventListener('change', function() {
+  activeDomain = this.value;
+  renderDimensions();
+  updateLevelInfo();
+  logger.sys(`切换领域：${DOMAIN_DEFS[activeDomain]?.name || activeDomain}`);
+});
+
+document.getElementById('resetDimsBtn').addEventListener('click', () => {
+  dimensionState = JSON.parse(JSON.stringify(CORE_DIMS));
+  for (const domain of Object.keys(DOMAIN_DEFS)) {
+    for (const [key, dim] of Object.entries(DOMAIN_DEFS[domain].dims)) {
+      dim.selected = dim.values.map((_, i) => i);
+    }
+  }
+  customDimensions = [];
+  renderDimensions();
+  updateLevelInfo();
+  logger.sys('维度已重置为默认');
+});
+
+
+// ─── LEVEL INFO ───────────────────────────────────────────────
+function updateLevelInfo() {
+  const level = STATE.currentLevel;
+  const counts = computeAgentCounts(level);
+  const names = ['闪电', '快速', '标准', '增强', '深入', '专业', '全面', '极限', '全集', '完全穷举'];
+  const capabilities = [
+    '基础聚类', '+分叉检测', '+结构检查', '+前提提取',
+    '+对抗层', '+临界值定位', '+追溯可视化', '+多轮迭代', '核心全集', '完全穷举'
+  ];
+  
+  const card = document.getElementById('levelInfoCard');
+  const levelName = names[level] || 'Custom';
+  const cap = capabilities[level] || 'All capabilities';
+  
+  card.innerHTML = `
+    <div style="font-weight:600;font-size:13px;margin-bottom:4px;">L${level} ${levelName}</div>
+    <div class="row"><span class="label">推理Agent</span><span class="value">${counts.reasoning.toLocaleString()}</span></div>
+    <div class="row"><span class="label">对抗Agent</span><span class="value">${counts.attack.toLocaleString()}</span></div>
+    <div class="row"><span class="label">总计</span><span class="value">${counts.totalAgents.toLocaleString()}</span></div>
+    <div class="row"><span class="label">预估Token</span><span class="value">~${formatTokens(counts.totalTok)}</span></div>
+    <div class="row"><span class="label">覆盖率</span><span class="value">${counts.coverage}%</span></div>
+    <div style="font-size:10px;color:var(--text-weak);margin-top:4px;">${cap}</div>
+    ${level >= 5 ? '<div style="font-size:10px;color:var(--warn);margin-top:4px;">需要三步确认</div>' : ''}
+    ${level === 9 ? '<div style="font-size:10px;color:var(--danger);margin-top:4px;">完全穷举 - 无采样</div>' : ''}
+  `;
+}
+
+// ─── SETTINGS ─────────────────────────────────────────────────
+document.getElementById('settingsBtn').addEventListener('click', () => {
+  document.getElementById('settingsModal').classList.remove('hidden');
+});
+
+document.getElementById('saveSettingsBtn').addEventListener('click', async () => {
+  STATE.settings.baseUrl = document.getElementById('baseUrlInput').value.trim();
+  STATE.settings.apiKey = document.getElementById('apiKeyInput').value.trim();
+  STATE.settings.model = document.getElementById('modelSelect').value;
+  STATE.settings.customModel = document.getElementById('customModelInput').value.trim();
+  STATE.settings.reasoningEffort = document.getElementById('reasoningSelect').value;
+  
+  const concMode = document.getElementById('concurrencySelect').value;
+  STATE.settings.concurrencyMode = concMode;
+  STATE.settings.concurrencyLimit = concMode === 'adaptive' ? 10 : parseInt(concMode);
+  STATE.settings.maxTokens = parseInt(document.getElementById('maxTokensInput').value) || 382000;
+  
+  // Save to DB
+  if (DB._db) await DB.saveSettings(STATE.settings);
+  
+  document.getElementById('settingsModal').classList.add('hidden');
+  updateLevelInfo();
+  logger.sys('设置已保存');
+});
+
+document.getElementById('settingsModal').addEventListener('click', (e) => {
+  if (e.target === document.getElementById('settingsModal')) {
+    document.getElementById('settingsModal').classList.add('hidden');
+  }
+});
+
+
+document.getElementById('modelSelect').addEventListener('change', function() {
+  const custom = document.getElementById('customModelInput');
+  if (this.value === '__custom__') {
+    custom.classList.remove('hidden');
+    STATE.settings.model = '__custom__';
+  } else {
+    custom.classList.add('hidden');
+  }
+});
+
+document.getElementById('testConnectionBtn').addEventListener('click', async () => {
+  const statusEl = document.getElementById('settingsStatus');
+  statusEl.textContent = '测试中...';
+  statusEl.style.color = 'var(--text-secondary)';
+  
+  const testKey = document.getElementById('apiKeyInput').value.trim();
+  const testUrl = document.getElementById('baseUrlInput').value.trim();
+  const testModel = document.getElementById('modelSelect').value === '__custom__' 
+    ? document.getElementById('customModelInput').value.trim() 
+    : document.getElementById('modelSelect').value;
+  
+  if (!testKey) { statusEl.textContent = '请填入API密钥'; statusEl.style.color = 'var(--danger)'; return; }
+  
+  try {
+    const resp = await fetch(`${testUrl}/v1/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${testKey}` },
+      body: JSON.stringify({
+        model: testModel,
+        messages: [{ role: 'user', content: 'Respond with the JSON: {"ok": true}' }],
+        max_tokens: 30
+      })
+    });
+    
+    if (resp.ok) {
+      statusEl.textContent = '连接成功';
+      statusEl.style.color = 'var(--pass)';
+    } else {
+      const err = await resp.text();
+      statusEl.textContent = `错误：${resp.status}`;
+      statusEl.style.color = 'var(--danger)';
+    }
+  } catch (e) {
+    statusEl.textContent = `错误：${e.message}`;
+    statusEl.style.color = 'var(--danger)';
+  }
+});
+
+// ─── DEBUG PANEL ──────────────────────────────────────────────
+function initDebugPanel() {
+  const toolbar = document.getElementById('debugToolbar');
+  const isMobile = window.innerWidth <= 1279;
+  const categories = isMobile ? ['ALL', 'API', 'ERR', 'SYS'] : ['ALL', 'API', 'PARSE', 'RETRY', 'STRUCT', 'CLUSTER', 'ATTACK', 'SYS'];
+  let activeFilter = 'ALL';
+  
+  toolbar.innerHTML = categories.map(cat => 
+    `<button class="debug-filter-btn ${cat === 'ALL' ? 'active' : ''}" data-cat="${cat}">${cat}</button>`
+  ).join('') + 
+  `<input type="text" placeholder="搜索..." class="debug-search-input" style="
+    background:var(--panel);border:1px solid var(--border);color:var(--text);
+    padding:2px 8px;font-size:10px;font-family:var(--font-mono);border-radius:2px;width:${isMobile ? '60px' : '100px'};
+  ">
+  <span class="debug-stats" style="color:var(--text-weak);font-size:10px;margin-left:auto;"></span>
+  <button class="debug-export-btn" style="
+    background:var(--panel);border:1px solid var(--border);color:var(--text-weak);
+    padding:2px 8px;font-size:10px;cursor:pointer;border-radius:2px;font-family:inherit;
+  ">导出</button>
+  <button class="debug-clear-btn" style="
+    background:var(--panel);border:1px solid var(--border);color:var(--text-weak);
+    padding:2px 8px;font-size:10px;cursor:pointer;border-radius:2px;font-family:inherit;
+  ">清空</button>`;
+  
+  const linesContainer = document.getElementById('debugLogLines');
+  let searchText = '';
+  
+  function refreshDebug() {
+    let entries;
+    if (activeFilter === 'ERR') {
+      entries = logger.entries.filter(e => ['PARSE', 'RETRY', 'THROTTLE'].includes(e.category));
+      if (searchText) { const q = searchText.toLowerCase(); entries = entries.filter(e => e.message.toLowerCase().includes(q)); }
+    } else {
+      entries = logger.filter({ category: activeFilter === 'ALL' ? null : activeFilter, search: searchText || null });
+    }
+    // Show last 300
+    const visible = entries.slice(-300);
+    linesContainer.innerHTML = visible.map(e => {
+      const elapsed = formatElapsed(e.elapsed);
+      const cat = e.category.padEnd(6);
+      const lvl = e.level === 'ERROR' ? 'ERR' : e.level === 'WARN' ? 'WRN' : 'INF';
+      const agent = e.agentId !== null ? `A#${String(e.agentId).padStart(4,'0')}` : 'SYS   ';
+      const colorMap = { API: '#4488ff', PARSE: '#44ff44', RETRY: '#ff8844', STRUCT: '#44ff44', CLUSTER: '#aa66ff', ATTACK: '#ff8844', PROBE: '#aaaaaa', SYS: '#555555', CACHE: '#44ff44', THROTTLE: '#ff4444' };
+      const color = e.level === 'ERROR' ? '#ff4444' : e.level === 'WARN' ? '#ff8844' : (colorMap[e.category] || '#999');
+      const bg = e.level === 'ERROR' ? 'rgba(255,68,68,0.08)' : e.level === 'WARN' ? 'rgba(255,136,68,0.05)' : 'transparent';
+      return `<div class="debug-log-line" style="color:${color};background:${bg};" title="${escHtml(JSON.stringify(e.detail || {}, null, 2))}">${elapsed}  ${cat} ${lvl}  ${agent} ${escHtml(e.message)}</div>`;
+    }).join('');
+    if (entries.length > 300) {
+      linesContainer.innerHTML = `<div style="color:#555;font-size:10px;padding:2px 8px;">... 前 ${entries.length - 300} 条省略（仅显示最后300条）</div>` + linesContainer.innerHTML;
+    }
+    toolbar.querySelector('.debug-stats').textContent = `共 ${entries.length} 条`;
+    linesContainer.scrollTop = linesContainer.scrollHeight;
+  }
+  
+  logger.onUpdate(() => refreshDebug());
+  
+  toolbar.querySelectorAll('.debug-filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      activeFilter = btn.dataset.cat;
+      toolbar.querySelectorAll('.debug-filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      refreshDebug();
+    });
+  });
+  
+  toolbar.querySelector('.debug-search-input').addEventListener('input', (e) => {
+    searchText = e.target.value;
+    refreshDebug();
+  });
+  
+  toolbar.querySelector('.debug-export-btn').addEventListener('click', () => {
+    const blob = new Blob([logger.export()], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `debug-log-${STATE.sessionId || Date.now()}.json`; a.click();
+  });
+  
+  toolbar.querySelector('.debug-clear-btn').addEventListener('click', () => {
+    logger.entries = [];
+    refreshDebug();
+  });
+  
+  refreshDebug();
+}
+
+function formatElapsed(ms) {
+  const min = Math.floor(ms / 60000);
+  const sec = Math.floor((ms % 60000) / 1000);
+  const msr = Math.floor(ms % 1000);
+  return `${String(min).padStart(2,'0')}:${String(sec).padStart(2,'0')}.${String(msr).padStart(3,'0')}`;
+}
+
+document.getElementById('debugToggleBtn').addEventListener('click', () => {
+  STATE.debugVisible = !STATE.debugVisible;
+  const panel = document.getElementById('debugPanel');
+  if (STATE.debugVisible) {
+    panel.classList.remove('hidden');
+  } else {
+    panel.classList.add('hidden');
+  }
+});
+
+// ─── EVENT HANDLERS ──────────────────────────────────────────
+document.getElementById('levelSlider').addEventListener('input', function() {
+  STATE.currentLevel = parseInt(this.value);
+  updateLevelInfo();
+});
+
+document.getElementById('runBtn').addEventListener('click', runInference);
+document.getElementById('probeBtn').addEventListener('click', runProbe);
+document.getElementById('interruptBtn').addEventListener('click', toggleInterrupt);
+
+document.getElementById('upgradeBtn').addEventListener('click', () => {
+  if (STATE.currentLevel < 9) {
+    STATE.currentLevel++;
+    document.getElementById('levelSlider').value = STATE.currentLevel;
+    updateLevelInfo();
+    runInference();
+  }
+});
+
+document.getElementById('exportBtn').addEventListener('click', () => {
+  const report = {
+    timestamp: new Date().toISOString(),
+    level: STATE.currentLevel,
+    sessionId: STATE.sessionId,
+    clusters: STATE.clusters.map(c => ({
+      label: c.label,
+      size: c.size,
+      pct: c.pct,
+      angleDiversity: c.angleDiversity,
+      structureIntegrity: c.structureIntegrity,
+      topPremises: extractPremiseList(c).slice(0, 5).map(p => p.text)
+    })),
+    forkInfo: STATE.forkInfo,
+    debugStats: logger.stats()
+  };
+  const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `inference-report-${STATE.sessionId || Date.now()}.json`;
+  a.click();
+  logger.sys('报告已导出');
+});
+
+// Mobile tab switching
+document.querySelectorAll('.tab-bar button').forEach(btn => {
+  btn.addEventListener('click', function() {
+    const tab = this.dataset.tab;
+    document.querySelectorAll('.tab-bar button').forEach(b => b.classList.remove('active'));
+    this.classList.add('active');
+    const sidebar = document.getElementById('sidebar');
+    const mainArea = document.getElementById('mainArea');
+    if (tab === 'input') {
+      sidebar.classList.remove('mobile-hidden');
+      mainArea.classList.add('mobile-hidden');
+    } else {
+      sidebar.classList.add('mobile-hidden');
+      mainArea.classList.remove('mobile-hidden');
+    }
+  });
+});
+// Before unload - save snapshot
+window.addEventListener('beforeunload', () => {
+  if (STATE.running && STATE.sessionId) {
+    saveProgressSnapshot(STATE.completedAgents, STATE.totalAgents);
+  }
+});
+
+// ─── INIT ─────────────────────────────────────────────────────
+async function init() {
+  // Load DB
+  try {
+    await DB.open();
+    const savedSettings = await DB.getSettings();
+    if (savedSettings) {
+      STATE.settings = { ...STATE.settings, ...savedSettings };
+      document.getElementById('baseUrlInput').value = STATE.settings.baseUrl;
+      document.getElementById('apiKeyInput').value = STATE.settings.apiKey;
+      document.getElementById('modelSelect').value = STATE.settings.model;
+      document.getElementById('customModelInput').value = STATE.settings.customModel || '';
+      document.getElementById('reasoningSelect').value = STATE.settings.reasoningEffort;
+      document.getElementById('concurrencySelect').value = STATE.settings.concurrencyMode;
+      document.getElementById('maxTokensInput').value = STATE.settings.maxTokens || 382000;
+      if (STATE.settings.model === '__custom__') {
+        document.getElementById('customModelInput').classList.remove('hidden');
+      }
+    }
+  } catch (e) {
+    console.warn('IndexedDB init failed:', e);
+  }
+
+  // Render UI
+  renderDimensions();
+  renderConstraints();
+  updateLevelInfo();
+  initDebugPanel();
+
+  // Check for interrupted session
+  if (DB._db) {
+    const snap = await DB.getSnapshot(STATE.sessionId || '');
+    if (snap && snap.status === 'paused') {
+      const resume = confirm('发现中断的会话。是否继续？');
+      if (resume) {
+        STATE.sessionId = snap.sessionId;
+        STATE.currentLevel = snap.level;
+        STATE.completedAgents = snap.completed;
+        document.getElementById('levelSlider').value = STATE.currentLevel;
+        updateLevelInfo();
+        setStatus('正在恢复中断的会话...');
+        runInference();
+      }
+    }
+  }
+
+  // Load session history
+  if (DB._db) {
+    const sessions = await DB.listSessions();
+    const select = document.getElementById('sessionHistorySelect');
+    const deleteBtn = document.getElementById('deleteSessionBtn');
+    select.innerHTML = '<option value="">-- 选择历史会话 (' + sessions.length + '条) --</option>';
+    for (const s of sessions) {
+      const date = new Date(s.timestamp).toLocaleString('zh-CN');
+      const sit = (s.situation || '').substring(0, 30);
+      const label = escHtml('L' + s.level + ' | ' + sit + (s.situation && s.situation.length > 30 ? '...' : '') + ' | ' + date + ' | ' + (s.clusters ? s.clusters.length : 0) + '簇');
+      select.innerHTML += '<option value="' + s.id + '">' + label + '</option>';
+    }
+    select.addEventListener('change', () => {
+      const sid = select.value;
+      deleteBtn.disabled = !sid;
+      if (!sid) return;
+      const s = sessions.find(x => x.id === sid);
+      if (!s) return;
+      // Restore state
+      STATE.sessionId = s.id;
+      STATE.currentLevel = s.level;
+      hardConstraints = s.constraints || [];
+      document.getElementById('situationInput').value = s.situation || '';
+      document.getElementById('levelSlider').value = s.level;
+      STATE.clusters = s.clusters || [];
+      STATE.forkInfo = s.forkInfo || null;
+      STATE._attackResults = s.attackResults || null;
+      updateLevelInfo();
+      renderConstraints();
+      // Render results
+      if (s.clusters && s.clusters.length > 0) {
+        renderResults(s.clusters, s.forkInfo, s.attackResults, s.counts);
+      } else {
+        document.getElementById('resultContent').classList.add('hidden');
+        document.getElementById('resultEmpty').classList.remove('hidden');
+      }
+      setStatus('已加载历史会话 L' + s.level);
+    });
+    deleteBtn.addEventListener('click', async () => {
+      const sid = select.value;
+      if (!sid) return;
+      const s = sessions.find(x => x.id === sid);
+      if (!s) return;
+      const sit = (s.situation || '').substring(0, 40);
+      if (!confirm('删除会话：L' + s.level + ' | ' + sit + (s.situation && s.situation.length > 40 ? '...' : '') + '？')) return;
+      await DB.deleteSession(sid);
+      const idx = sessions.findIndex(x => x.id === sid);
+      if (idx >= 0) sessions.splice(idx, 1);
+      select.value = '';
+      deleteBtn.disabled = true;
+      // Rebuild options
+      select.innerHTML = '<option value="">-- 选择历史会话 (' + sessions.length + '条) --</option>';
+      for (const ss of sessions) {
+        const date = new Date(ss.timestamp).toLocaleString('zh-CN');
+        const sit2 = (ss.situation || '').substring(0, 30);
+        const label = escHtml('L' + ss.level + ' | ' + sit2 + (ss.situation && ss.situation.length > 30 ? '...' : '') + ' | ' + date + ' | ' + (ss.clusters ? ss.clusters.length : 0) + '簇');
+        select.innerHTML += '<option value="' + ss.id + '">' + label + '</option>';
+      }
+      // If current session was deleted, clear main area
+      if (STATE.sessionId === sid) {
+        STATE.sessionId = null;
+        STATE.clusters = [];
+        STATE.forkInfo = null;
+        STATE._attackResults = null;
+        document.getElementById('resultContent').classList.add('hidden');
+        document.getElementById('resultEmpty').classList.remove('hidden');
+        setStatus('就绪');
+      }
+      logger.sys('已删除会话 ' + sid);
+    });
+  }
+
+  // Mobile/Tablet: default to input tab
+  if (window.innerWidth <= 1279) {
+    const sidebar = document.getElementById('sidebar');
+    const mainArea = document.getElementById('mainArea');
+    sidebar.classList.remove('mobile-hidden');
+    mainArea.classList.add('mobile-hidden');
+    const inputTab = document.querySelector('.tab-bar button[data-tab="input"]');
+    const resultTab = document.querySelector('.tab-bar button[data-tab="result"]');
+    if (inputTab) inputTab.classList.add('active');
+    if (resultTab) resultTab.classList.remove('active');
+  }
+
+  setStatus('就绪');
+  logger.sys('系统初始化完成');
+}
+
+
+init();
+</script>
+</body>
+</html>
