@@ -198,7 +198,7 @@ body {
   background: rgba(255,255,255,0.03);
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
 }
-.thinking-block.collapsed { max-height: 0; overflow: hidden; padding: 0 12px; }
+.thinking-block.collapsed { max-height: 0; overflow: hidden; padding: 0 12px; margin: 0; border: none; }
 .thinking-toggle {
   color: var(--text-weak); font-size: 11px; cursor: pointer;
   display: flex; align-items: center; gap: 4px; margin-top: 4px;
@@ -457,6 +457,40 @@ body {
   .sidebar { display: none; }
   .app-layout.desktop { grid-template-columns: 1fr; }
 }
+/* === 代码运行结果块 === */
+.code-run-block {
+  margin: 8px 0;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+}
+.code-run-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 12px;
+  background: var(--bg-tertiary);
+  font-size: 12px; color: var(--text-secondary);
+}
+.code-run-header .lang-tag {
+  padding: 1px 8px; border-radius: 3px; font-size: 11px;
+  font-family: var(--font-mono);
+  background: rgba(68,136,255,0.15); color: var(--accent-blue);
+}
+.code-run-header .run-time {
+  margin-left: auto; font-size: 11px; color: var(--text-weak);
+}
+.code-run-body {
+  padding: 10px 14px;
+  font-family: var(--font-mono); font-size: 13px; line-height: 1.5;
+  max-height: 300px; overflow-y: auto;
+  white-space: pre-wrap; word-break: break-all;
+}
+.code-run-body.stdout { color: var(--accent-green); background: rgba(68,255,68,0.05); }
+.code-run-body.stderr { color: var(--accent-red); background: rgba(255,68,68,0.08); }
+.code-run-body.mixed { color: var(--text-primary); background: rgba(255,255,255,0.03); }
+.code-run-status { display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px; }
+.code-run-status.success { background: var(--accent-green); }
+.code-run-status.error { background: var(--accent-red); }
+.code-run-status.timeout { background: var(--accent-gold); }
 </style>
 </head>
 <body>
@@ -546,6 +580,106 @@ function generateUUID() {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
     const r = Math.random() * 16 | 0;
     return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+  });
+}
+
+// ===== 代码执行沙箱 Worker =====
+let _codeWorker = null;
+let _codeWorkerReady = false;
+let _pendingCodeRequests = new Map();
+let _codeRequestId = 0;
+
+function getCodeWorker() {
+  if (_codeWorker && _codeWorkerReady) return Promise.resolve(_codeWorker);
+  return new Promise((resolve, reject) => {
+    const workerCode = `
+let pyodide=null,pyodideLoadPromise=null;
+async function getPyodide(){
+  if(pyodide)return pyodide;
+  if(pyodideLoadPromise)return pyodideLoadPromise;
+  pyodideLoadPromise=(async()=>{
+    try{importScripts('https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js');
+    pyodide=await loadPyodide({indexURL:'https://cdn.jsdelivr.net/pyodide/v0.25.0/full/'});
+    return pyodide;}catch(e){pyodideLoadPromise=null;throw new Error('Pyodide加载失败: '+e.message);}
+  })();return pyodideLoadPromise;
+}
+self.onmessage=async function(e){
+  var d=e.data,id=d.id,lang=d.language,code=d.code,to=d.timeout,st=Date.now();
+  try{
+    var r;
+    if(lang==='javascript')r=await execJS(code,to||10000);
+    else if(lang==='python')r=await execPy(code,to||30000);
+    else throw new Error('不支持的语言: '+lang);
+    self.postMessage({id:id,success:true,stdout:r.stdout,stderr:r.stderr,exitCode:r.exitCode,result:r.result||'',duration:Date.now()-st});
+  }catch(err){self.postMessage({id:id,success:false,error:err.message,duration:Date.now()-st});}
+};
+function execJS(code,timeout){
+  return new Promise(function(resolve,reject){
+    var out='',err2='';
+    var _console={log:function(){out+=Array.prototype.slice.call(arguments).join(' ')+'\\n';},error:function(){err2+=Array.prototype.slice.call(arguments).join(' ')+'\\n';}};
+    var _setTimeout=function(fn,d){if(d>5000)throw new Error('setTimeout最大5秒');return setTimeout(fn,d);};
+    var _setInterval=function(){throw new Error('setInterval不允许');};
+    var t=setTimeout(function(){reject(new Error('JS执行超时('+timeout+'ms)'));},timeout);
+    try{
+      var fn=new Function(
+        'console','setTimeout','setInterval','Math','JSON','Date','String','Number','Array','Object','RegExp','parseInt','parseFloat','isNaN','isFinite',
+        'document','window','globalThis','self','fetch','XMLHttpRequest','WebSocket','indexedDB','localStorage','sessionStorage','Worker','importScripts','Function','eval',
+        code);
+      var r=fn(
+        _console,_setTimeout,_setInterval,Math,JSON,Date,String,Number,Array,Object,RegExp,parseInt,parseFloat,isNaN,isFinite,
+        void 0,void 0,void 0,void 0,void 0,void 0,void 0,void 0,void 0,void 0,void 0,void 0,void 0,void 0);
+      clearTimeout(t);
+      resolve({stdout:out+(r!==undefined?String(r):''),stderr:err2,exitCode:0});
+    }catch(e){
+      clearTimeout(t);
+      resolve({stdout:out,stderr:err2+(err2?'\\n':'')+e.message,exitCode:1});
+    }
+  });
+}
+
+async function execPy(code,timeout){
+  var py=await getPyodide();
+  var out='',err='';
+  py.setStdout({batched:function(t){out+=t+'\\n';}});
+  py.setStderr({batched:function(t){err+=t+'\\n';}});
+
+  try{
+    var r=await Promise.race([py.runPythonAsync(code),new Promise(function(_,rej){return setTimeout(function(){rej(new Error('Python执行超时('+timeout+'ms)'));},timeout)})]);
+    return {stdout:out,stderr:err,exitCode:0,result:r!==undefined?String(r):''};
+  }catch(e){return {stdout:out,stderr:err+e.message,exitCode:1};}
+}`;
+    const blob = new Blob([workerCode], { type: 'application/javascript' });
+    _codeWorker = new Worker(URL.createObjectURL(blob));
+    _codeWorker.onmessage = function(e) {
+      const { id, success, stdout, stderr, error, exitCode, duration, result } = e.data;
+      const p = _pendingCodeRequests.get(id);
+      if (p) { _pendingCodeRequests.delete(id); p.resolve({ success, stdout: stdout || '', stderr: error || stderr || '', exitCode: exitCode || (success ? 0 : 1), duration, result: result || '' }); }
+    };
+    _codeWorker.onerror = function(e) { DebugLogger.error('codeWorker', '崩溃: ' + (e.message || '')); _codeWorkerReady = false; _codeWorker = null; };
+    _codeWorkerReady = true;
+    resolve(_codeWorker);
+  });
+}
+
+function runCodeInSandbox(language, code, timeout) {
+  return new Promise((resolve, reject) => {
+    const id = ++_codeRequestId;
+    const maxTO = (timeout || (language === 'python' ? 30000 : 10000)) + 3000;
+    const t = setTimeout(() => {
+      _pendingCodeRequests.delete(id);
+      reject(new Error('代码执行超时'));
+    }, maxTO);
+    _pendingCodeRequests.set(id, {
+      resolve: (d) => { clearTimeout(t); resolve(d); },
+      reject: (e) => { clearTimeout(t); reject(e); }
+    });
+    getCodeWorker().then(w => {
+      w.postMessage({ id, language, code, timeout: timeout || (language === 'python' ? 30000 : 10000) });
+    }).catch(e => {
+      clearTimeout(t);
+      _pendingCodeRequests.delete(id);
+      reject(e);
+    });
   });
 }
 
@@ -2023,6 +2157,34 @@ lineFrom/lineTo 为1起始的行号。不指定则读全文。
 `);
   }
 
+  // [v6] 代码运行工具（所有有文件工具的Agent自动获得）
+  if (agent.enableFileTool) {
+    parts.push(`
+[代码运行工具 — runCode]
+
+导入并运行群文件系统中已存在的代码文件，查看执行结果/报错。
+
+① 运行代码文件：
+{"runCode":"文件名.py"}
+{"runCode":"文件名.js"}
+
+- 文件须已存在（由你或其他Agent用 createFile 创建）
+- .js → JavaScript沙箱执行（10秒超时，无DOM/网络）
+- .py → Pyodide执行（30秒超时，首次加载需几秒）
+- 运行结果注入你的上下文，其他Agent不可见
+
+═══ 使用场景 ═══
+- 验证其他Agent写的代码是否可运行
+- 调试算法/逻辑 → 写文件→运行→改文件→再运行
+- 代码审查时实际运行看报错
+
+═══ 规则 ═══
+- 命令独占一行JSON块
+- 结果仅自己可见
+- 同一轮可与其他命令混合使用
+`);
+  }
+
   // ═══════════════════════════════════════════════════════════
   // 【身份锚点·第二道锁】prompt末尾再次确认 — 对抗"近因效应"。
   // 模型更容易记住prompt末尾内容，做最后兜底。
@@ -2259,6 +2421,10 @@ function parseAgentResponse(rawText) {
       if (parsed.listFiles === true) {
         readFileCommands.push({ action: 'listFiles', _raw: candidate });
       }
+      // [v6] runCode
+      if (parsed.runCode && typeof parsed.runCode === 'string') {
+        readFileCommands.push({ action: 'runCode', filename: parsed.runCode.trim(), _raw: candidate });
+      }
     } catch(e) {
       try {
         const fixed = safeJsonNumbers(candidate).replace(/\n/g, '\\n');
@@ -2276,6 +2442,10 @@ function parseAgentResponse(rawText) {
         }
         if (parsed.listFiles === true) {
           readFileCommands.push({ action: 'listFiles', _raw: candidate });
+        }
+        // [v6] runCode fallback
+        if (parsed.runCode && typeof parsed.runCode === 'string') {
+          readFileCommands.push({ action: 'runCode', filename: parsed.runCode.trim(), _raw: candidate });
         }
       } catch(e2) {}
     }
@@ -2794,6 +2964,11 @@ function buildAgentContext(group, agentId, messages) {
           if (q.startsWith('[listFiles]')) {
             const content = (sr.results || [])[0]?.content || (sr.error ? '❌ ' + sr.error : '');
             return `📋 文件列表\n${content}`;
+          }
+          if (q.startsWith('[runCode]')) {
+            const fn = q.replace('[runCode] ', '');
+            const content = (sr.results || [])[0]?.content || (sr.error ? '❌ ' + sr.error : '');
+            return `▶️ 代码运行: ${fn}\n${content}`;
           }
           // fallback (含 [extract]/[crawl] 未匹配时的兜底)
           const fbLabel = q.startsWith('[extract]') ? '📖 提取' : q.startsWith('[crawl]') ? '🕷️ 爬取' : '🔍 结果';
@@ -4569,6 +4744,45 @@ async function runChatRound(groupId, userMessage = null, manualMentions = []) {
                           agentWroteFileThisRound[`${groupId}:${member.agentId}`] = true;
                         }
                       }
+                    } else if (rfc.action === 'runCode') {
+                      // [v6] 代码运行 — 仅从文件系统读入代码
+                      const ext = (rfc.filename || '').split('.').pop()?.toLowerCase();
+                      const language = ext === 'py' ? 'python' : ext === 'js' ? 'javascript' : null;
+                      if (!language) {
+                        msg.searchResult.push({
+                          query: '[runCode] ' + rfc.filename, results: [], answer: null,
+                          error: '不支持的文件类型: .' + (ext || '未知') + '。仅支持 .js 和 .py'
+                        });
+                      } else {
+                        const codeToRun = await getFileContent(groupId, rfc.filename);
+                        if (codeToRun === null) {
+                          msg.searchResult.push({
+                            query: '[runCode] ' + rfc.filename, results: [], answer: null,
+                            error: '文件 "' + rfc.filename + '" 不存在。请先用 createFile 创建。'
+                          });
+                        } else {
+                          try {
+                            const timeout = language === 'python' ? 30000 : 10000;
+                            const result = await runCodeInSandbox(language, codeToRun, timeout);
+                            const ok = result.exitCode === 0;
+                            const summary = (result.stdout ? result.stdout : '') +
+                              (result.stderr ? (result.stdout ? '\n' : '') + result.stderr : '') +
+                              '\n[退出码: ' + result.exitCode + ' | ' + (result.duration || 0) + 'ms]';
+                            msg.searchResult.push({
+                              query: '[runCode] ' + rfc.filename,
+                              results: [{ title: (ok ? '✓' : '✗') + ' ' + language + ' | ' + (result.duration || 0) + 'ms', url: '', content: summary }],
+                              answer: null,
+                              _codeRun: { language, filename: rfc.filename, stdout: result.stdout, stderr: result.stderr, exitCode: result.exitCode, duration: result.duration }
+                            });
+                            hadToolCommands = true;
+                          } catch (runErr) {
+                            msg.searchResult.push({
+                              query: '[runCode] ' + rfc.filename, results: [], answer: null,
+                              error: '执行异常: ' + runErr.message
+                            });
+                          }
+                        }
+                      }
                     }
                   }
                   if (msg.searchResult.some(r => !r.error)) {
@@ -5478,17 +5692,17 @@ function renderSingleMessageHTML(msg, group) {
       </div>
       ${quoteHTML}
       <div class="message-bubble ${isUser ? 'user-bg' : 'agent-bg'}">
+        ${msg.thinkingContent ? `
+        <div class="thinking-block collapsed" id="thinking-${msgId}">
+          ${escapeHTML(msg.thinkingContent)}
+        </div>
+        <div class="thinking-toggle" onclick="toggleThinking('${msgId}')">
+          [>] 思考过程
+        </div>` : ''}
         <div class="message-body ${isLong ? 'folded' : ''}" id="body-${msgId}">
           ${renderMarkdown(contentText)}
         </div>
         ${isLong ? `<span class="expand-toggle" onclick="toggleMessageExpand('${msgId}')">[展开全文]</span>` : ''}
-        ${msg.thinkingContent ? `
-        <div class="thinking-toggle" onclick="toggleThinking('${msgId}')">
-          [>] 思考过程
-        </div>
-        <div class="thinking-block collapsed" id="thinking-${msgId}">
-          ${escapeHTML(msg.thinkingContent)}
-        </div>` : ''}
       </div>
       ${commandResultHTML}
       ${msg.searchResult && msg.searchResult.length > 0 ? `
@@ -5790,8 +6004,8 @@ function createMessageBubble(agentName, avatar, memberConfig) {
       <span class="time" style="color:var(--accent-green);">生成中...</span>
     </div>
     <div class="message-bubble agent-bg">
-      <div class="message-body"></div>
       <div class="thinking-block collapsed" style="display:none;"></div>
+      <div class="message-body"></div>
     </div>`;
   
   container.appendChild(wrapper);
@@ -5829,7 +6043,9 @@ function updateThinkingBlock(wrapper, thinkingText) {
         const tb = wrapper.querySelector('.thinking-block');
         if (tb) tb.classList.toggle('collapsed');
       };
-      wrapper.querySelector('.message-bubble').appendChild(toggle);
+      const bubble = wrapper.querySelector('.message-bubble');
+      const body = bubble.querySelector('.message-body');
+      bubble.insertBefore(toggle, body);
     }
   }
 }
@@ -5935,6 +6151,29 @@ function finalizeMessageBubble(wrapper, parsed, savedMsg) {
       };
       const bubble = wrapper.querySelector('.message-bubble');
       if (bubble) bubble.appendChild(historyIndicator);
+    }
+  }
+
+  // [v6] 代码运行结果展示
+  if (savedMsg && savedMsg.searchResult) {
+    const codeRuns = savedMsg.searchResult.filter(sr => sr._codeRun);
+    for (const cr of codeRuns) {
+      const existingBlock = wrapper.querySelector('.code-run-block[data-file="' + cr._codeRun.filename + '"]');
+      if (existingBlock) continue;
+      const block = document.createElement('div');
+      block.className = 'code-run-block';
+      block.setAttribute('data-file', cr._codeRun.filename);
+      const ok = cr._codeRun.exitCode === 0;
+      block.innerHTML = '<div class="code-run-header">' +
+        '<span class="code-run-status ' + (ok ? 'success' : 'error') + '"></span>' +
+        '<span>' + (ok ? '✓' : '✗') + ' 运行: ' + escapeHTML(cr._codeRun.filename) + '</span>' +
+        '<span class="lang-tag">' + cr._codeRun.language + '</span>' +
+        '<span class="run-time">' + (cr._codeRun.duration || 0) + 'ms 退出码:' + cr._codeRun.exitCode + '</span>' +
+        '</div>' +
+        (cr._codeRun.stdout ? '<div class="code-run-body stdout">' + escapeHTML(cr._codeRun.stdout) + '</div>' : '') +
+        (cr._codeRun.stderr ? '<div class="code-run-body stderr">' + escapeHTML(cr._codeRun.stderr) + '</div>' : '');
+      const bubble = wrapper.querySelector('.message-bubble');
+      if (bubble) bubble.appendChild(block);
     }
   }
 }
